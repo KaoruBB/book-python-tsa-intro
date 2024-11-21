@@ -1,0 +1,145 @@
+* 第5部　線形ガウス状態空間モデル
+:PROPERTIES:
+:CUSTOM_ID: 第5部-線形ガウス状態空間モデル
+:END:
+** 第4章　ローカルレベルモデルの数理
+:PROPERTIES:
+:CUSTOM_ID: 第4章-ローカルレベルモデルの数理
+:END:
+#+begin_src python
+# 数値計算に使うライブラリ
+import numpy as np
+import pandas as pd
+from scipy import stats
+
+# 統計モデルを推定するライブラリ
+import statsmodels.api as sm
+import statsmodels.tsa.api as tsa
+
+# グラフを描画するライブラリ
+from matplotlib import pylab as plt
+import seaborn as sns
+sns.set()
+#+end_src
+
+#+begin_src python
+# 表示設定
+np.set_printoptions(linewidth=60)
+pd.set_option('display.width', 80)
+
+from matplotlib.pylab import rcParams
+rcParams['figure.figsize'] = 8, 4
+#+end_src
+
+*** statsmodelsを用いた散漫カルマンフィルタの実装
+:PROPERTIES:
+:CUSTOM_ID: statsmodelsを用いた散漫カルマンフィルタの実装
+:END:
+**** シミュレーションデータの生成
+:PROPERTIES:
+:CUSTOM_ID: シミュレーションデータの生成
+:END:
+#+begin_src python
+# 乱数の種
+np.random.seed(1)
+
+# 正規分布に従う乱数の累積和を作成し、ランダムウォーク系列を作る
+sim_size = 100
+mu = np.cumsum(stats.norm.rvs(loc=0, scale=1, size=sim_size).round(1)) + 30
+
+# 観測値の作成
+y = mu + stats.norm.rvs(loc=0, scale=5, size=sim_size).round(1)
+
+# 時系列インデックスの付与
+y_ts = pd.Series(
+    y, index=pd.date_range(start='2020-01-01', periods=sim_size, freq='D'))
+
+# 結果の確認
+print(y_ts.head(3))
+#+end_src
+
+#+begin_example
+2020-01-01    29.4
+2020-01-02    37.1
+2020-01-03    32.5
+Freq: D, dtype: float64
+#+end_example
+
+**** 散漫カルマンフィルタの実装
+:PROPERTIES:
+:CUSTOM_ID: 散漫カルマンフィルタの実装
+:END:
+#+begin_src python
+# データの格納とモデルの特定
+mod_local_level_fix = tsa.UnobservedComponents(
+    y_ts, level='local level', use_exact_diffuse=True)
+#+end_src
+
+#+begin_src python
+# フィルタリング
+res_local_level_fix = mod_local_level_fix.filter(pd.Series(np.array([10, 1])))
+
+# フィルタ化推定量を取り出す
+np.round(res_local_level_fix.level["filtered"][0:3], 5)
+#+end_src
+
+#+begin_example
+array([29.4    , 33.43333, 33.07478])
+#+end_example
+
+#+begin_src python
+# 散漫対数尤度を取り出す
+np.round(res_local_level_fix.llf, 5)
+#+end_src
+
+#+begin_example
+-321.88824
+#+end_example
+
+**** 状態が変化しない単純なモデル
+:PROPERTIES:
+:CUSTOM_ID: 状態が変化しない単純なモデル
+:END:
+#+begin_src python
+# データの格納とモデルの特定
+mod_const = tsa.UnobservedComponents(
+    y_ts, level='deterministic constant', use_exact_diffuse=True)
+
+# フィルタリング
+res_const = mod_const.fit()
+
+# フィルタ化推定量を取り出す
+np.round(res_const.level["filtered"][0:3], 5)
+#+end_src
+
+#+begin_example
+array([29.4 , 33.25, 33.  ])
+#+end_example
+
+#+begin_src python
+# 2時点目までの平均
+np.mean(y_ts[0:2])
+#+end_src
+
+#+begin_example
+33.25
+#+end_example
+
+#+begin_src python
+# 3時点目までの平均
+np.mean(y_ts[0:3])
+#+end_src
+
+#+begin_example
+33.0
+#+end_example
+
+#+begin_src python
+print('最新時点の状態', np.round(res_const.level["filtered"][-1], 5))
+print('観測値の平均値', np.round(np.mean(y_ts), 5))
+#+end_src
+
+#+begin_example
+最新時点の状態 30.931
+観測値の平均値 30.931
+#+end_example

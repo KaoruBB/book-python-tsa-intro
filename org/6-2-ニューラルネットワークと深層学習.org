@@ -1,0 +1,1417 @@
+* 第6部　機械学習法
+:PROPERTIES:
+:CUSTOM_ID: 第6部-機械学習法
+:END:
+** 第2章　ニューラルネットワークと深層学習
+:PROPERTIES:
+:CUSTOM_ID: 第2章-ニューラルネットワークと深層学習
+:END:
+*** 分析の準備
+:PROPERTIES:
+:CUSTOM_ID: 分析の準備
+:END:
+#+begin_src python
+# Dartsで生成される通知を減らす
+import warnings
+import logging
+# warnings.filterwarnings("ignore")
+logging.disable(logging.CRITICAL)
+
+# 数値計算に使うライブラリ
+import numpy as np
+import pandas as pd
+
+# グラフを描画するライブラリ
+from matplotlib import pyplot as plt
+import matplotlib.dates as mdates
+import seaborn as sns
+sns.set()
+
+# データ読み込みに利用
+import statsmodels.api as sm
+
+# sktime：グラフ描画
+from sktime.utils.plotting import plot_series
+
+# sktime：予測
+from sktime.forecasting.naive import NaiveForecaster
+from sktime.forecasting.trend import PolynomialTrendForecaster
+
+# sktime：予測の評価指標
+from sktime.performance_metrics.forecasting import (
+    mean_absolute_scaled_error, MeanAbsoluteError,
+    mean_absolute_percentage_error, mean_absolute_error
+)
+
+# sktime：予測の評価
+from sktime.forecasting.model_selection import (
+    temporal_train_test_split, ExpandingWindowSplitter, ForecastingGridSearchCV
+)
+from sktime.forecasting.model_evaluation import evaluate
+
+# sktime：データの変換
+from sktime.transformations.series.detrend import (
+    Deseasonalizer, Detrender
+)
+from sktime.transformations.series.difference import Differencer
+from sktime.transformations.series.boxcox import LogTransformer
+from sklearn.preprocessing import StandardScaler
+from sktime.transformations.series.adapt import TabularToSeriesAdaptor
+
+# sktime：パイプライン
+from sktime.forecasting.compose import (
+    TransformedTargetForecaster, MultiplexForecaster
+)
+from sktime.pipeline import make_pipeline
+from sktime.transformations.compose import OptionalPassthrough
+
+# 機械学習法
+from sklearn.neural_network import MLPRegressor
+import lightgbm as lgb
+
+# 再帰的に回帰分析を実行するための関数の読み込み
+from sktime.forecasting.compose import make_reduction
+
+# Darts関連
+from darts import TimeSeries
+from darts.models import RNNModel
+
+# グラフの日本語表記
+from matplotlib import rcParams
+rcParams['font.family'] = 'sans-serif'
+rcParams['font.sans-serif'] = 'Meiryo'
+#+end_src
+
+#+begin_example
+D:\git\020_Books\2022_1_Kodan_python_tsa\030_ブログ用の資料\book-python-tsa-intro\py_tsa_venv\Lib\site-packages\tqdm\auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
+  from .autonotebook import tqdm as notebook_tqdm
+#+end_example
+
+#+begin_src python
+# 表示設定
+np.set_printoptions(linewidth=60)
+pd.set_option('display.width', 80)
+
+from matplotlib.pylab import rcParams
+rcParams['figure.figsize'] = 8, 4
+#+end_src
+
+*** ニューラルネットワーク
+:PROPERTIES:
+:CUSTOM_ID: ニューラルネットワーク
+:END:
+**** 活性化関数
+:PROPERTIES:
+:CUSTOM_ID: 活性化関数
+:END:
+#+begin_src python
+# 教科書の図の作成
+
+# 活性化関数を適用させる対象
+x = np.arange(-10, 11)
+
+# ロジスティック関数
+def logistic(u):
+    return 1 / (1 + np.exp(-u))
+
+# ReLU
+def relu(u):
+    return np.maximum(0, u)
+
+# 2行のグラフを作る
+fig, ax = plt.subplots(figsize=(8, 4), ncols=2, tight_layout=True)
+
+# ロジスティック関数の折れ線グラフ
+ax[0].plot(x, logistic(x))
+ax[0].set_title('ロジスティック関数')
+
+# ReLUの折れ線グラフ
+ax[1].plot(x, relu(x))
+ax[1].set_title('ReLU')
+#+end_src
+
+#+begin_example
+Text(0.5, 1.0, 'ReLU')
+#+end_example
+
+#+caption: png
+[[file:6-2-%E3%83%8B%E3%83%A5%E3%83%BC%E3%83%A9%E3%83%AB%E3%83%8D%E3%83%83%E3%83%88%E3%83%AF%E3%83%BC%E3%82%AF%E3%81%A8%E6%B7%B1%E5%B1%A4%E5%AD%A6%E7%BF%92_files/6-2-%E3%83%8B%E3%83%A5%E3%83%BC%E3%83%A9%E3%83%AB%E3%83%8D%E3%83%83%E3%83%88%E3%83%AF%E3%83%BC%E3%82%AF%E3%81%A8%E6%B7%B1%E5%B1%A4%E5%AD%A6%E7%BF%92_6_1.png]]
+
+*** ニューラルネットワークによる飛行機乗客数予測
+:PROPERTIES:
+:CUSTOM_ID: ニューラルネットワークによる飛行機乗客数予測
+:END:
+**** 飛行機乗客数データの読み込み
+:PROPERTIES:
+:CUSTOM_ID: 飛行機乗客数データの読み込み
+:END:
+#+begin_src python
+# 飛行機乗客数データの読み込み
+air_passengers = sm.datasets.get_rdataset('AirPassengers').data
+
+# 日付インデックスの作成(PeriodIndex)
+date_index = pd.period_range(
+    start='1949-01', periods=len(air_passengers), freq='M')
+air_passengers.index = date_index
+
+# 不要な時間ラベルの削除
+air_passengers = air_passengers.drop(air_passengers.columns[0], axis=1)
+#+end_src
+
+#+begin_src python
+# 訓練データとテストデータに分割する
+train_air, test_air = temporal_train_test_split(air_passengers, test_size=36)
+
+# 予測期間
+fh_air = np.arange(1, len(test_air) + 1)
+#+end_src
+
+**** モデルの推定と予測
+:PROPERTIES:
+:CUSTOM_ID: モデルの推定と予測
+:END:
+#+begin_src python
+# 前処理の設定
+pipe_transform = make_pipeline(
+    Detrender(forecaster=PolynomialTrendForecaster(degree=1), 
+              model='multiplicative'),
+    TabularToSeriesAdaptor(StandardScaler())
+)
+#+end_src
+
+#+begin_src python
+# 予測器(ニューラルネットワーク)
+nn_regressor = MLPRegressor(hidden_layer_sizes=(100, 100),
+                            max_iter=2000, random_state=1)
+
+# 前処理からモデル化までを1つのパイプラインにまとめる
+pipe_nn = TransformedTargetForecaster(
+    [
+        pipe_transform,
+        ('forecast', make_reduction(nn_regressor, window_length=12, 
+                                    strategy="recursive")),
+    ]
+)
+
+# データへの当てはめ
+pipe_nn.fit(train_air)
+#+end_src
+
+#+begin_html
+  <style>#sk-c76cbc9b-a53b-4a04-8a64-be824af93330 {
+      /* Definition of color scheme common for light and dark mode */
+      --sklearn-color-text: black;
+      --sklearn-color-line: gray;
+      /* Definition of color scheme for objects */
+      --sklearn-color-level-0: #fff5e6;
+      --sklearn-color-level-1: #f6e4d2;
+      --sklearn-color-level-2: #ffe0b3;
+      --sklearn-color-level-3: chocolate;
+
+      /* Specific color for light theme */
+      --sklearn-color-text-on-default-background: var(--theme-code-foreground, var(--jp-content-font-color1, black));
+      --sklearn-color-background: var(--theme-background, var(--jp-layout-color0, white));
+      --sklearn-color-border-box: var(--theme-code-foreground, var(--jp-content-font-color1, black));
+      --sklearn-color-icon: #696969;
+
+      @media (prefers-color-scheme: dark) {
+        /* Redefinition of color scheme for dark theme */
+        --sklearn-color-text-on-default-background: var(--theme-code-foreground, var(--jp-content-font-color1, white));
+        --sklearn-color-background: var(--theme-background, var(--jp-layout-color0, #111));
+        --sklearn-color-border-box: var(--theme-code-foreground, var(--jp-content-font-color1, white));
+        --sklearn-color-icon: #878787;
+      }
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 {
+      color: var(--sklearn-color-text);
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 pre {
+      padding: 0;
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 input.sk-hidden--visually {
+      border: 0;
+      clip: rect(1px 1px 1px 1px);
+      clip: rect(1px, 1px, 1px, 1px);
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      padding: 0;
+      position: absolute;
+      width: 1px;
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-dashed-wrapped {
+      border: 1px dashed var(--sklearn-color-line);
+      margin: 0 0.4em 0.5em 0.4em;
+      box-sizing: border-box;
+      padding-bottom: 0.4em;
+      background-color: var(--sklearn-color-background);
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-container {
+      /* jupyter's `normalize.less` sets `[hidden] { display: none; }`
+         but bootstrap.min.css set `[hidden] { display: none !important; }`
+         so we also need the `!important` here to be able to override the
+         default hidden behavior on the sphinx rendered scikit-learn.org.
+         See: https://github.com/scikit-learn/scikit-learn/issues/21755 */
+      display: inline-block !important;
+      position: relative;
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-text-repr-fallback {
+      display: none;
+    }
+
+    div.sk-parallel-item,
+    div.sk-serial,
+    div.sk-item {
+      /* draw centered vertical line to link estimators */
+      background-image: linear-gradient(var(--sklearn-color-text-on-default-background), var(--sklearn-color-text-on-default-background));
+      background-size: 2px 100%;
+      background-repeat: no-repeat;
+      background-position: center center;
+    }
+
+    /* Parallel-specific style estimator block */
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-parallel-item::after {
+      content: "";
+      width: 100%;
+      border-bottom: 2px solid var(--sklearn-color-text-on-default-background);
+      flex-grow: 1;
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-parallel {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      background-color: var(--sklearn-color-background);
+      position: relative;
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-parallel-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-parallel-item:first-child::after {
+      align-self: flex-end;
+      width: 50%;
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-parallel-item:last-child::after {
+      align-self: flex-start;
+      width: 50%;
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-parallel-item:only-child::after {
+      width: 0;
+    }
+
+    /* Serial-specific style estimator block */
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-serial {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: var(--sklearn-color-background);
+      padding-right: 1em;
+      padding-left: 1em;
+    }
+
+
+    /* Toggleable style: style used for estimator/Pipeline/ColumnTransformer box that is
+    clickable and can be expanded/collapsed.
+    - Pipeline and ColumnTransformer use this feature and define the default style
+    - Estimators will overwrite some part of the style using the `sk-estimator` class
+    */
+
+    /* Pipeline and ColumnTransformer style (default) */
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-toggleable {
+      /* Default theme specific background. It is overwritten whether we have a
+      specific estimator or a Pipeline/ColumnTransformer */
+      background-color: var(--sklearn-color-background);
+    }
+
+    /* Toggleable label */
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 label.sk-toggleable__label {
+      cursor: pointer;
+      display: block;
+      width: 100%;
+      margin-bottom: 0;
+      padding: 0.5em;
+      box-sizing: border-box;
+      text-align: center;
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 label.sk-toggleable__label-arrow:before {
+      /* Arrow on the left of the label */
+      content: "笆ｸ";
+      float: left;
+      margin-right: 0.25em;
+      color: var(--sklearn-color-icon);
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 label.sk-toggleable__label-arrow:hover:before {
+      color: var(--sklearn-color-text);
+    }
+
+    /* Toggleable content - dropdown */
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-toggleable__content {
+      max-height: 0;
+      max-width: 0;
+      overflow: hidden;
+      text-align: left;
+      background-color: var(--sklearn-color-level-0);
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-toggleable__content pre {
+      margin: 0.2em;
+      border-radius: 0.25em;
+      color: var(--sklearn-color-text);
+      background-color: var(--sklearn-color-level-0);
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 input.sk-toggleable__control:checked~div.sk-toggleable__content {
+      /* Expand drop-down */
+      max-height: 200px;
+      max-width: 100%;
+      overflow: auto;
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {
+      content: "笆ｾ";
+    }
+
+    /* Pipeline/ColumnTransformer-specific style */
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {
+      color: var(--sklearn-color-text);
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    /* Estimator-specific style */
+
+    /* Colorize estimator box */
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {
+      /* unfitted */
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-label label.sk-toggleable__label,
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-label label {
+      /* The background is the default theme color */
+      color: var(--sklearn-color-text-on-default-background);
+    }
+
+    /* On hover, darken the color of the background */
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-label:hover label.sk-toggleable__label {
+      color: var(--sklearn-color-text);
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    /* Estimator label */
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-label label {
+      font-family: monospace;
+      font-weight: bold;
+      display: inline-block;
+      line-height: 1.2em;
+    }
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-label-container {
+      text-align: center;
+    }
+
+    /* Estimator-specific */
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-estimator {
+      font-family: monospace;
+      border: 1px dotted var(--sklearn-color-border-box);
+      border-radius: 0.25em;
+      box-sizing: border-box;
+      margin-bottom: 0.5em;
+      background-color: var(--sklearn-color-level-0);
+    }
+
+    /* on hover */
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 div.sk-estimator:hover {
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    /* Specification for estimator info */
+
+    .sk-estimator-doc-link,
+    a:link.sk-estimator-doc-link,
+    a:visited.sk-estimator-doc-link {
+      float: right;
+      font-size: smaller;
+      line-height: 1em;
+      font-family: monospace;
+      background-color: var(--sklearn-color-background);
+      border-radius: 1em;
+      height: 1em;
+      width: 1em;
+      text-decoration: none !important;
+      margin-left: 1ex;
+      border: var(--sklearn-color-level-1) 1pt solid;
+      color: var(--sklearn-color-level-1);
+    }
+
+    /* On hover */
+    div.sk-estimator:hover .sk-estimator-doc-link:hover,
+    .sk-estimator-doc-link:hover,
+    div.sk-label-container:hover .sk-estimator-doc-link:hover,
+    .sk-estimator-doc-link:hover {
+      background-color: var(--sklearn-color-level-3);
+      color: var(--sklearn-color-background);
+      text-decoration: none;
+    }
+
+    /* Span, style for the box shown on hovering the info icon */
+    .sk-estimator-doc-link span {
+      display: none;
+      z-index: 9999;
+      position: relative;
+      font-weight: normal;
+      right: .2ex;
+      padding: .5ex;
+      margin: .5ex;
+      width: min-content;
+      min-width: 20ex;
+      max-width: 50ex;
+      color: var(--sklearn-color-text);
+      box-shadow: 2pt 2pt 4pt #999;
+      background: var(--sklearn-color-level-0);
+      border: .5pt solid var(--sklearn-color-level-3);
+    }
+
+    .sk-estimator-doc-link:hover span {
+      display: block;
+    }
+
+    /* "?"-specific style due to the `<a>` HTML tag */
+
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 a.estimator_doc_link {
+      float: right;
+      font-size: 1rem;
+      line-height: 1em;
+      font-family: monospace;
+      background-color: var(--sklearn-color-background);
+      border-radius: 1rem;
+      height: 1rem;
+      width: 1rem;
+      text-decoration: none;
+      color: var(--sklearn-color-level-1);
+      border: var(--sklearn-color-level-1) 1pt solid;
+    }
+
+    /* On hover */
+    #sk-c76cbc9b-a53b-4a04-8a64-be824af93330 a.estimator_doc_link:hover {
+      background-color: var(--sklearn-color-level-3);
+      color: var(--sklearn-color-background);
+      text-decoration: none;
+    }
+  </style>
+#+end_html
+
+<<sk-c76cbc9b-a53b-4a04-8a64-be824af93330>>
+
+#+begin_html
+  <pre>TransformedTargetForecaster(steps=[TransformerPipeline(steps=[Detrender(forecaster=PolynomialTrendForecaster(),
+                                                                          model=&#x27;multiplicative&#x27;),
+                                                                TabularToSeriesAdaptor(transformer=StandardScaler())]),
+                                     (&#x27;forecast&#x27;,
+                                      RecursiveTabularRegressionForecaster(estimator=MLPRegressor(hidden_layer_sizes=(100, 100), max_iter=2000, random_state=1),
+                                                                           window_length=12))])</pre>
+#+end_html
+
+Please rerun this cell to show the HTML repr or trust the notebook.
+
+TransformedTargetForecaster?Documentation for
+TransformedTargetForecaster
+
+#+begin_html
+  <pre>TransformedTargetForecaster(steps=[TransformerPipeline(steps=[Detrender(forecaster=PolynomialTrendForecaster(),
+                                                                          model=&#x27;multiplicative&#x27;),
+                                                                TabularToSeriesAdaptor(transformer=StandardScaler())]),
+                                     (&#x27;forecast&#x27;,
+                                      RecursiveTabularRegressionForecaster(estimator=MLPRegressor(hidden_layer_sizes=(100, 100), max_iter=2000, random_state=1),
+                                                                           window_length=12))])</pre>
+#+end_html
+
+TransformerPipeline?Documentation for TransformerPipeline
+
+#+begin_html
+  <pre>TransformerPipeline(steps=[Detrender(forecaster=PolynomialTrendForecaster(),
+                                       model=&#x27;multiplicative&#x27;),
+                             TabularToSeriesAdaptor(transformer=StandardScaler())])</pre>
+#+end_html
+
+forecast?Documentation for forecast
+
+#+begin_html
+  <pre>RecursiveTabularRegressionForecaster(estimator=MLPRegressor(hidden_layer_sizes=(100, 100), max_iter=2000, random_state=1),
+                                       window_length=12)</pre>
+#+end_html
+
+estimator: MLPRegressor
+
+#+begin_html
+  <pre>MLPRegressor(hidden_layer_sizes=(100, 100), max_iter=2000, random_state=1)</pre>
+#+end_html
+
+MLPRegressor?Documentation for MLPRegressor
+
+#+begin_html
+  <pre>MLPRegressor(hidden_layer_sizes=(100, 100), max_iter=2000, random_state=1)</pre>
+#+end_html
+
+#+begin_src python
+# 予測の実施
+pipe_nn_pred = pipe_nn.predict(fh_air)
+
+# 予測精度
+mae = mean_absolute_error(test_air, pipe_nn_pred)
+mase = mean_absolute_scaled_error(
+    test_air, pipe_nn_pred, y_train=train_air)
+
+print('MAE :', mae)
+print('MASE:', mase)
+#+end_src
+
+#+begin_example
+MAE : 19.93013422712584
+MASE: 0.9809219697803427
+#+end_example
+
+*** dartsライブラリを利用する準備
+:PROPERTIES:
+:CUSTOM_ID: dartsライブラリを利用する準備
+:END:
+#+begin_src python
+# 前処理
+transed = pipe_transform.fit_transform(train_air)
+
+# dartsのために日付列を追加
+transed['time'] = transed.index.to_timestamp()
+
+# 結果の確認
+print(transed.head(3))
+#+end_src
+
+#+begin_example
+            value       time
+1949-01  1.005337 1949-01-01
+1949-02  1.227182 1949-02-01
+1949-03  1.990141 1949-03-01
+#+end_example
+
+#+begin_src python
+# dartsのためのデータ
+TimeSeries.from_dataframe(
+    transed, time_col='time', value_cols='value').head(3)
+#+end_src
+
+#+begin_html
+  <svg style="position: absolute; width: 0; height: 0; overflow: hidden">
+#+end_html
+
+#+begin_html
+  </svg>
+#+end_html
+
+#+begin_html
+  <style>/* CSS stylesheet for displaying xarray objects in jupyterlab.
+   *
+   */
+
+  :root {
+    --xr-font-color0: var(--jp-content-font-color0, rgba(0, 0, 0, 1));
+    --xr-font-color2: var(--jp-content-font-color2, rgba(0, 0, 0, 0.54));
+    --xr-font-color3: var(--jp-content-font-color3, rgba(0, 0, 0, 0.38));
+    --xr-border-color: var(--jp-border-color2, #e0e0e0);
+    --xr-disabled-color: var(--jp-layout-color3, #bdbdbd);
+    --xr-background-color: var(--jp-layout-color0, white);
+    --xr-background-color-row-even: var(--jp-layout-color1, white);
+    --xr-background-color-row-odd: var(--jp-layout-color2, #eeeeee);
+  }
+
+  html[theme=dark],
+  html[data-theme=dark],
+  body[data-theme=dark],
+  body.vscode-dark {
+    --xr-font-color0: rgba(255, 255, 255, 1);
+    --xr-font-color2: rgba(255, 255, 255, 0.54);
+    --xr-font-color3: rgba(255, 255, 255, 0.38);
+    --xr-border-color: #1F1F1F;
+    --xr-disabled-color: #515151;
+    --xr-background-color: #111111;
+    --xr-background-color-row-even: #111111;
+    --xr-background-color-row-odd: #313131;
+  }
+
+  .xr-wrap {
+    display: block !important;
+    min-width: 300px;
+    max-width: 700px;
+  }
+
+  .xr-text-repr-fallback {
+    /* fallback to plain text repr when CSS is not injected (untrusted notebook) */
+    display: none;
+  }
+
+  .xr-header {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+    border-bottom: solid 1px var(--xr-border-color);
+  }
+
+  .xr-header > div,
+  .xr-header > ul {
+    display: inline;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .xr-obj-type,
+  .xr-array-name {
+    margin-left: 2px;
+    margin-right: 10px;
+  }
+
+  .xr-obj-type {
+    color: var(--xr-font-color2);
+  }
+
+  .xr-sections {
+    padding-left: 0 !important;
+    display: grid;
+    grid-template-columns: 150px auto auto 1fr 20px 20px;
+  }
+
+  .xr-section-item {
+    display: contents;
+  }
+
+  .xr-section-item input {
+    display: none;
+  }
+
+  .xr-section-item input + label {
+    color: var(--xr-disabled-color);
+  }
+
+  .xr-section-item input:enabled + label {
+    cursor: pointer;
+    color: var(--xr-font-color2);
+  }
+
+  .xr-section-item input:enabled + label:hover {
+    color: var(--xr-font-color0);
+  }
+
+  .xr-section-summary {
+    grid-column: 1;
+    color: var(--xr-font-color2);
+    font-weight: 500;
+  }
+
+  .xr-section-summary > span {
+    display: inline-block;
+    padding-left: 0.5em;
+  }
+
+  .xr-section-summary-in:disabled + label {
+    color: var(--xr-font-color2);
+  }
+
+  .xr-section-summary-in + label:before {
+    display: inline-block;
+    content: '►';
+    font-size: 11px;
+    width: 15px;
+    text-align: center;
+  }
+
+  .xr-section-summary-in:disabled + label:before {
+    color: var(--xr-disabled-color);
+  }
+
+  .xr-section-summary-in:checked + label:before {
+    content: '▼';
+  }
+
+  .xr-section-summary-in:checked + label > span {
+    display: none;
+  }
+
+  .xr-section-summary,
+  .xr-section-inline-details {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  .xr-section-inline-details {
+    grid-column: 2 / -1;
+  }
+
+  .xr-section-details {
+    display: none;
+    grid-column: 1 / -1;
+    margin-bottom: 5px;
+  }
+
+  .xr-section-summary-in:checked ~ .xr-section-details {
+    display: contents;
+  }
+
+  .xr-array-wrap {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 20px auto;
+  }
+
+  .xr-array-wrap > label {
+    grid-column: 1;
+    vertical-align: top;
+  }
+
+  .xr-preview {
+    color: var(--xr-font-color3);
+  }
+
+  .xr-array-preview,
+  .xr-array-data {
+    padding: 0 5px !important;
+    grid-column: 2;
+  }
+
+  .xr-array-data,
+  .xr-array-in:checked ~ .xr-array-preview {
+    display: none;
+  }
+
+  .xr-array-in:checked ~ .xr-array-data,
+  .xr-array-preview {
+    display: inline-block;
+  }
+
+  .xr-dim-list {
+    display: inline-block !important;
+    list-style: none;
+    padding: 0 !important;
+    margin: 0;
+  }
+
+  .xr-dim-list li {
+    display: inline-block;
+    padding: 0;
+    margin: 0;
+  }
+
+  .xr-dim-list:before {
+    content: '(';
+  }
+
+  .xr-dim-list:after {
+    content: ')';
+  }
+
+  .xr-dim-list li:not(:last-child):after {
+    content: ',';
+    padding-right: 5px;
+  }
+
+  .xr-has-index {
+    font-weight: bold;
+  }
+
+  .xr-var-list,
+  .xr-var-item {
+    display: contents;
+  }
+
+  .xr-var-item > div,
+  .xr-var-item label,
+  .xr-var-item > .xr-var-name span {
+    background-color: var(--xr-background-color-row-even);
+    margin-bottom: 0;
+  }
+
+  .xr-var-item > .xr-var-name:hover span {
+    padding-right: 5px;
+  }
+
+  .xr-var-list > li:nth-child(odd) > div,
+  .xr-var-list > li:nth-child(odd) > label,
+  .xr-var-list > li:nth-child(odd) > .xr-var-name span {
+    background-color: var(--xr-background-color-row-odd);
+  }
+
+  .xr-var-name {
+    grid-column: 1;
+  }
+
+  .xr-var-dims {
+    grid-column: 2;
+  }
+
+  .xr-var-dtype {
+    grid-column: 3;
+    text-align: right;
+    color: var(--xr-font-color2);
+  }
+
+  .xr-var-preview {
+    grid-column: 4;
+  }
+
+  .xr-index-preview {
+    grid-column: 2 / 5;
+    color: var(--xr-font-color2);
+  }
+
+  .xr-var-name,
+  .xr-var-dims,
+  .xr-var-dtype,
+  .xr-preview,
+  .xr-attrs dt {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 10px;
+  }
+
+  .xr-var-name:hover,
+  .xr-var-dims:hover,
+  .xr-var-dtype:hover,
+  .xr-attrs dt:hover {
+    overflow: visible;
+    width: auto;
+    z-index: 1;
+  }
+
+  .xr-var-attrs,
+  .xr-var-data,
+  .xr-index-data {
+    display: none;
+    background-color: var(--xr-background-color) !important;
+    padding-bottom: 5px !important;
+  }
+
+  .xr-var-attrs-in:checked ~ .xr-var-attrs,
+  .xr-var-data-in:checked ~ .xr-var-data,
+  .xr-index-data-in:checked ~ .xr-index-data {
+    display: block;
+  }
+
+  .xr-var-data > table {
+    float: right;
+  }
+
+  .xr-var-name span,
+  .xr-var-data,
+  .xr-index-name div,
+  .xr-index-data,
+  .xr-attrs {
+    padding-left: 25px !important;
+  }
+
+  .xr-attrs,
+  .xr-var-attrs,
+  .xr-var-data,
+  .xr-index-data {
+    grid-column: 1 / -1;
+  }
+
+  dl.xr-attrs {
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: 125px auto;
+  }
+
+  .xr-attrs dt,
+  .xr-attrs dd {
+    padding: 0;
+    margin: 0;
+    float: left;
+    padding-right: 10px;
+    width: auto;
+  }
+
+  .xr-attrs dt {
+    font-weight: normal;
+    grid-column: 1;
+  }
+
+  .xr-attrs dt:hover span {
+    display: inline-block;
+    background: var(--xr-background-color);
+    padding-right: 10px;
+  }
+
+  .xr-attrs dd {
+    grid-column: 2;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .xr-icon-database,
+  .xr-icon-file-text2,
+  .xr-no-icon {
+    display: inline-block;
+    vertical-align: middle;
+    width: 1em;
+    height: 1.5em !important;
+    stroke-width: 0;
+    stroke: currentColor;
+    fill: currentColor;
+  }
+  </style>
+#+end_html
+
+#+begin_html
+  <pre class='xr-text-repr-fallback'>&lt;TimeSeries (DataArray) (time: 3, component: 1, sample: 1)&gt; Size: 24B
+  array([[[1.00533693]],
+
+         [[1.22718245]],
+
+         [[1.9901408 ]]])
+  Coordinates:
+    * time       (time) datetime64[ns] 24B 1949-01-01 1949-02-01 1949-03-01
+    * component  (component) object 8B &#x27;value&#x27;
+  Dimensions without coordinates: sample
+  Attributes:
+      static_covariates:  None
+      hierarchy:          None</pre>
+#+end_html
+
+TimeSeries (DataArray)
+
+#+begin_html
+  <ul class="xr-dim-list">
+#+end_html
+
+#+begin_html
+  <li>
+#+end_html
+
+time: 3
+
+#+begin_html
+  </li>
+#+end_html
+
+#+begin_html
+  <li>
+#+end_html
+
+component: 1
+
+#+begin_html
+  </li>
+#+end_html
+
+#+begin_html
+  <li>
+#+end_html
+
+sample: 1
+
+#+begin_html
+  </li>
+#+end_html
+
+#+begin_html
+  </ul>
+#+end_html
+
+#+begin_html
+  <ul class="xr-sections">
+#+end_html
+
+#+begin_html
+  <li class="xr-section-item">
+#+end_html
+
+1.005 1.227 1.99
+
+#+begin_html
+  <pre>array([[[1.00533693]],
+
+         [[1.22718245]],
+
+         [[1.9901408 ]]])</pre>
+#+end_html
+
+#+begin_html
+  </li>
+#+end_html
+
+#+begin_html
+  <li class="xr-section-item">
+#+end_html
+
+Coordinates: (2)
+
+#+begin_html
+  <ul class="xr-var-list">
+#+end_html
+
+#+begin_html
+  <li class="xr-var-item">
+#+end_html
+
+time
+
+(time)
+
+datetime64[ns]
+
+1949-01-01 1949-02-01 1949-03-01
+
+#+begin_html
+  <dl class="xr-attrs">
+#+end_html
+
+#+begin_html
+  </dl>
+#+end_html
+
+#+begin_html
+  <pre>array([&#x27;1949-01-01T00:00:00.000000000&#x27;, &#x27;1949-02-01T00:00:00.000000000&#x27;,
+         &#x27;1949-03-01T00:00:00.000000000&#x27;], dtype=&#x27;datetime64[ns]&#x27;)</pre>
+#+end_html
+
+#+begin_html
+  </li>
+#+end_html
+
+#+begin_html
+  <li class="xr-var-item">
+#+end_html
+
+component
+
+(component)
+
+object
+
+'value'
+
+#+begin_html
+  <dl class="xr-attrs">
+#+end_html
+
+#+begin_html
+  </dl>
+#+end_html
+
+#+begin_html
+  <pre>array([&#x27;value&#x27;], dtype=object)</pre>
+#+end_html
+
+#+begin_html
+  </li>
+#+end_html
+
+#+begin_html
+  </ul>
+#+end_html
+
+#+begin_html
+  </li>
+#+end_html
+
+#+begin_html
+  <li class="xr-section-item">
+#+end_html
+
+Indexes: (2)
+
+#+begin_html
+  <ul class="xr-var-list">
+#+end_html
+
+#+begin_html
+  <li class="xr-var-item">
+#+end_html
+
+time
+
+PandasIndex
+
+#+begin_html
+  <pre>PandasIndex(DatetimeIndex([&#x27;1949-01-01&#x27;, &#x27;1949-02-01&#x27;, &#x27;1949-03-01&#x27;], dtype=&#x27;datetime64[ns]&#x27;, name=&#x27;time&#x27;, freq=&#x27;MS&#x27;))</pre>
+#+end_html
+
+#+begin_html
+  </li>
+#+end_html
+
+#+begin_html
+  <li class="xr-var-item">
+#+end_html
+
+component
+
+PandasIndex
+
+#+begin_html
+  <pre>PandasIndex(Index([&#x27;value&#x27;], dtype=&#x27;object&#x27;, name=&#x27;component&#x27;))</pre>
+#+end_html
+
+#+begin_html
+  </li>
+#+end_html
+
+#+begin_html
+  </ul>
+#+end_html
+
+#+begin_html
+  </li>
+#+end_html
+
+#+begin_html
+  <li class="xr-section-item">
+#+end_html
+
+Attributes: (2)
+
+#+begin_html
+  <dl class="xr-attrs">
+#+end_html
+
+#+begin_html
+  <dt>
+#+end_html
+
+static_covariates :
+
+#+begin_html
+  </dt>
+#+end_html
+
+#+begin_html
+  <dd>
+#+end_html
+
+None
+
+#+begin_html
+  </dd>
+#+end_html
+
+#+begin_html
+  <dt>
+#+end_html
+
+hierarchy :
+
+#+begin_html
+  </dt>
+#+end_html
+
+#+begin_html
+  <dd>
+#+end_html
+
+None
+
+#+begin_html
+  </dd>
+#+end_html
+
+#+begin_html
+  </dl>
+#+end_html
+
+#+begin_html
+  </li>
+#+end_html
+
+#+begin_html
+  </ul>
+#+end_html
+
+#+begin_src python
+# 参考：データの型
+type(TimeSeries.from_dataframe(
+    transed, time_col='time', value_cols='value').head(3))
+#+end_src
+
+#+begin_example
+darts.timeseries.TimeSeries
+#+end_example
+
+*** 深層学習による飛行機乗客数予測
+:PROPERTIES:
+:CUSTOM_ID: 深層学習による飛行機乗客数予測
+:END:
+**** RNN
+:PROPERTIES:
+:CUSTOM_ID: rnn
+:END:
+#+begin_src python
+params = {
+    'hidden_dim':100,        # 隠れ層のユニットの数
+    'n_epochs':300,          # エポックの数
+    'random_state':1,        # 乱数の種
+    'input_chunk_length':12, # 予測時に渡される過去の時間ステップの数
+    'training_length': 24    # 学習時に用いられる訓練データの長さ
+}
+#+end_src
+
+#+begin_src python
+# モデルの設定
+mod_rnn = RNNModel(
+    model="RNN",
+    ,**params
+)
+
+# 当てはめ
+mod_rnn.fit(
+    TimeSeries.from_dataframe(transed, time_col='time', value_cols='value'),
+    verbose=True
+)
+#+end_src
+
+#+begin_example
+Epoch 299: 100%|█████████████████████████████████████████████████████| 3/3 [00:00<00:00, 140.73it/s, train_loss=0.0646]
+
+
+
+
+
+RNNModel(model=RNN, hidden_dim=100, n_rnn_layers=1, dropout=0.0, training_length=24, n_epochs=300, random_state=1, input_chunk_length=12)
+#+end_example
+
+#+begin_src python
+# 予測
+rnn_pred = mod_rnn.predict(n=36)
+
+# 整形
+rnn_pred = rnn_pred.pd_dataframe()
+rnn_pred.index = rnn_pred.index.to_period()
+
+# 変換をもとに戻す
+rnn_pred = pipe_transform.inverse_transform(rnn_pred)
+
+# 結果の確認
+print(rnn_pred.head(3))
+#+end_src
+
+#+begin_example
+Predicting DataLoader 0: 100%|███████████████████████████████████████████████████████████| 1/1 [00:00<00:00, 23.09it/s]
+component       value
+time                 
+1958-01    334.855600
+1958-02    350.351550
+1958-03    396.321065
+#+end_example
+
+#+begin_src python
+# 予測精度
+mae = mean_absolute_error(test_air, rnn_pred)
+mase = mean_absolute_scaled_error(
+    test_air, rnn_pred, y_train=train_air)
+
+print('MAE :', mae)
+print('MASE:', mase)
+#+end_src
+
+#+begin_example
+MAE : 32.707779842394416
+MASE: 1.6098125313413996
+#+end_example
+
+**** LSTM
+:PROPERTIES:
+:CUSTOM_ID: lstm
+:END:
+#+begin_src python
+# モデルの設定
+mod_lstm = RNNModel(
+    model="LSTM",
+    ,**params
+)
+
+# 当てはめ
+mod_lstm.fit(
+    TimeSeries.from_dataframe(transed, time_col='time', value_cols='value'),
+    verbose=True,
+)
+#+end_src
+
+#+begin_example
+Epoch 299: 100%|██████████████████████████████████████████████████████| 3/3 [00:00<00:00, 86.05it/s, train_loss=0.0497]
+
+
+
+
+
+RNNModel(model=LSTM, hidden_dim=100, n_rnn_layers=1, dropout=0.0, training_length=24, n_epochs=300, random_state=1, input_chunk_length=12)
+#+end_example
+
+#+begin_src python
+# 予測
+lstm_pred = mod_lstm.predict(n=36)
+
+# 整形
+lstm_pred = lstm_pred.pd_dataframe()
+lstm_pred.index = lstm_pred.index.to_period()
+
+# 変換をもとに戻す
+lstm_pred = pipe_transform.inverse_transform(lstm_pred)
+
+# 結果の確認
+print(lstm_pred.head(3))
+#+end_src
+
+#+begin_example
+Predicting DataLoader 0: 100%|██████████████████████████████████████████████████████████| 1/1 [00:00<00:00, 166.93it/s]
+component       value
+time                 
+1958-01    344.912153
+1958-02    341.386061
+1958-03    382.821830
+#+end_example
+
+#+begin_src python
+# 予測精度
+mae = mean_absolute_error(test_air, lstm_pred)
+mase = mean_absolute_scaled_error(
+    test_air, lstm_pred, y_train=train_air)
+
+print('MAE :', mae)
+print('MASE:', mase)
+#+end_src
+
+#+begin_example
+MAE : 16.250495836361843
+MASE: 0.7998174123692352
+#+end_example
+
+**** 予測結果の比較
+:PROPERTIES:
+:CUSTOM_ID: 予測結果の比較
+:END:
+#+begin_src python
+# 予測結果の可視化
+fig, ax = plot_series(test_air, pipe_nn_pred, rnn_pred, lstm_pred, 
+                      labels=['test', 'mlp', 'rnn', 'lstm'], 
+                      markers=np.tile('', 4))
+fig.set_size_inches(8, 4)
+#+end_src
+
+#+caption: png
+[[file:6-2-%E3%83%8B%E3%83%A5%E3%83%BC%E3%83%A9%E3%83%AB%E3%83%8D%E3%83%83%E3%83%88%E3%83%AF%E3%83%BC%E3%82%AF%E3%81%A8%E6%B7%B1%E5%B1%A4%E5%AD%A6%E7%BF%92_files/6-2-%E3%83%8B%E3%83%A5%E3%83%BC%E3%83%A9%E3%83%AB%E3%83%8D%E3%83%83%E3%83%88%E3%83%AF%E3%83%BC%E3%82%AF%E3%81%A8%E6%B7%B1%E5%B1%A4%E5%AD%A6%E7%BF%92_30_0.png]]

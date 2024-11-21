@@ -1,0 +1,438 @@
+* 第2部　Pythonによる時系列分析の基本
+:PROPERTIES:
+:CUSTOM_ID: 第2部-pythonによる時系列分析の基本
+:END:
+** 第6章　時系列データのシミュレーションと見せかけの回帰
+:PROPERTIES:
+:CUSTOM_ID: 第6章-時系列データのシミュレーションと見せかけの回帰
+:END:
+*** 分析の準備
+:PROPERTIES:
+:CUSTOM_ID: 分析の準備
+:END:
+#+begin_src python
+# 数値計算に使うライブラリ
+import numpy as np
+import pandas as pd
+from scipy import stats
+
+# グラフを描画するライブラリ
+from matplotlib import pyplot as plt
+import seaborn as sns
+sns.set()
+
+# 統計モデルを推定するライブラリ
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+
+# グラフの日本語表記
+from matplotlib import rcParams
+rcParams['font.family'] = 'sans-serif'
+rcParams['font.sans-serif'] = 'Meiryo'
+#+end_src
+
+#+begin_src python
+# 表示設定
+np.set_printoptions(linewidth=60)
+pd.set_option('display.width', 60)
+
+from matplotlib.pylab import rcParams
+rcParams['figure.figsize'] = 8, 4
+#+end_src
+
+*** 正規ホワイトノイズ系列のシミュレーション
+:PROPERTIES:
+:CUSTOM_ID: 正規ホワイトノイズ系列のシミュレーション
+:END:
+#+begin_src python
+# 乱数の種
+np.random.seed(1)
+# 正規分布に従う乱数の生成
+stats.norm.rvs(loc=0, scale=1, size=4)
+#+end_src
+
+#+begin_example
+array([ 1.62434536, -0.61175641, -0.52817175, -1.07296862])
+#+end_example
+
+#+begin_src python
+# 生成する系列の数
+n_sim = 50
+
+# 乱数の種
+np.random.seed(1)
+
+# 正規ホワイトノイズ系列の作成と可視化
+for i in range(1, n_sim):
+    hn = stats.norm.rvs(loc=0, scale=1, size=50)
+    sns.lineplot(x = range(0, 50), y=hn)
+#+end_src
+
+#+caption: png
+[[file:2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_files/2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_6_0.png]]
+
+*** ランダムウォーク系列のシミュレーション
+:PROPERTIES:
+:CUSTOM_ID: ランダムウォーク系列のシミュレーション
+:END:
+#+begin_src python
+# 乱数の種
+np.random.seed(1)
+# 正規分布に従う乱数の累積和を作成し、ランダムウォーク系列を作る
+np.cumsum(stats.norm.rvs(loc=0, scale=1, size=4))
+#+end_src
+
+#+begin_example
+array([ 1.62434536,  1.01258895,  0.4844172 , -0.58855142])
+#+end_example
+
+#+begin_src python
+# 生成する系列の数
+n_sim = 50
+
+# 乱数の種
+np.random.seed(1)
+
+# ランダムウォーク系列の作成と可視化
+for i in range(1, n_sim):
+    rw = np.cumsum(stats.norm.rvs(loc=0, scale=1, size=50))
+    sns.lineplot(x = range(0, 50), y=rw)
+#+end_src
+
+#+caption: png
+[[file:2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_files/2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_9_0.png]]
+
+*** 正規ホワイトノイズ系列への線形回帰分析
+:PROPERTIES:
+:CUSTOM_ID: 正規ホワイトノイズ系列への線形回帰分析
+:END:
+**** 回帰直線
+:PROPERTIES:
+:CUSTOM_ID: 回帰直線
+:END:
+#+begin_src python
+# 乱数の種
+np.random.seed(1)
+
+# 2列のグラフを作る
+fig, ax = plt.subplots(figsize=(8, 4), ncols=2, tight_layout=True)
+
+# 正規ホワイトノイズ系列を2つ作って、回帰直線を図示する
+for i in range(0, 2):
+    # シミュレーションデータの作成
+    x = stats.norm.rvs(loc=0, scale=1, size=50)
+    y = stats.norm.rvs(loc=0, scale=1, size=50)
+    data_sim = pd.DataFrame({"x":x,"y":y})
+
+    # 回帰直線
+    sns.regplot(x='x', y='y', data=data_sim, ax=ax[i])
+#+end_src
+
+#+caption: png
+[[file:2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_files/2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_12_0.png]]
+
+*** F比の分布
+:PROPERTIES:
+:CUSTOM_ID: f比の分布
+:END:
+#+begin_src python
+# シミュレーションの回数
+n_sim = 1000
+
+# F比を保存する入れ物
+f_ratio_array = np.zeros(n_sim)
+
+# シミュレーションの実施
+np.random.seed(1)
+for i in range(1, n_sim):
+    # シミュレーションデータの作成
+    x = stats.norm.rvs(loc=0, scale=1, size=50)
+    y = stats.norm.rvs(loc=0, scale=1, size=50)
+    data_sim = pd.DataFrame({"x":x,"y":y})
+    
+    # 回帰分析の実行
+    lm_model_sim = smf.ols(formula='y ~ x', data=data_sim).fit()
+    
+    # F比の取得
+    f_ratio_array[i] = lm_model_sim.fvalue
+#+end_src
+
+#+begin_src python
+# 参考：モデルの自由度(群間変動の自由度)
+lm_model_sim.df_model
+#+end_src
+
+#+begin_example
+1.0
+#+end_example
+
+#+begin_src python
+# 残差の自由度(群内変動の自由度)
+lm_model_sim.df_resid
+#+end_src
+
+#+begin_example
+48.0
+#+end_example
+
+#+begin_src python
+# F比のヒストグラム
+sns.histplot(f_ratio_array, stat="density", bins=100)
+
+# F分布の折れ線グラフ
+f_df = pd.DataFrame({'x':np.arange(0, 12, 0.01)})
+f_df['density'] = stats.f.pdf(f_df.x, dfn=1, dfd=48)
+sns.lineplot(x='x', y='density', data=f_df, color='red')
+#+end_src
+
+#+begin_example
+<Axes: xlabel='x', ylabel='Density'>
+#+end_example
+
+#+caption: png
+[[file:2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_files/2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_17_1.png]]
+
+**** F検定
+:PROPERTIES:
+:CUSTOM_ID: f検定
+:END:
+#+begin_src python
+# F分布の95％点
+stats.f.ppf(q=0.95, dfn=1, dfd=48)
+#+end_src
+
+#+begin_example
+4.042652128566653
+#+end_example
+
+#+begin_src python
+# 間違って帰無仮説を棄却してしまう確率
+sum(f_ratio_array > stats.f.ppf(q=0.95, dfn=1, dfd=48)) / n_sim
+#+end_src
+
+#+begin_example
+0.046
+#+end_example
+
+*** ランダムウォーク系列への回帰分析
+:PROPERTIES:
+:CUSTOM_ID: ランダムウォーク系列への回帰分析
+:END:
+**** 回帰直線
+:PROPERTIES:
+:CUSTOM_ID: 回帰直線-1
+:END:
+#+begin_src python
+# 乱数の種
+np.random.seed(1)
+
+# 2列のグラフを作る
+fig, ax = plt.subplots(figsize=(8, 4), ncols=2, tight_layout=True)
+
+# ランダムウォーク系列を2つ作って、回帰直線を図示する
+for i in range(0, 2):
+    # シミュレーションデータの作成
+    x_rw = np.cumsum(stats.norm.rvs(loc=0, scale=1, size=50))
+    y_rw = np.cumsum(stats.norm.rvs(loc=0, scale=1, size=50))
+    data_sim = pd.DataFrame({"x":x_rw, "y":y_rw})
+
+    # 散布図
+    sns.regplot(x='x', y='y', data=data_sim, ax=ax[i])
+#+end_src
+
+#+caption: png
+[[file:2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_files/2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_23_0.png]]
+
+**** F比の分布
+:PROPERTIES:
+:CUSTOM_ID: f比の分布-1
+:END:
+#+begin_src python
+# シミュレーションの回数
+n_sim = 1000
+
+# F比を保存する入れ物
+f_ratio_array_rw = np.zeros(n_sim)
+
+# シミュレーションの実施
+np.random.seed(1)
+for i in range(1, n_sim):
+    # シミュレーションデータの作成
+    x_rw = np.cumsum(stats.norm.rvs(loc=0, scale=1, size=50))
+    y_rw = np.cumsum(stats.norm.rvs(loc=0, scale=1, size=50))
+    data_sim = pd.DataFrame({"x":x_rw, "y":y_rw})
+    
+    # 回帰分析の実行
+    lm_model_sim = smf.ols(formula='y ~ x', data=data_sim).fit()
+    
+    # F比の取得
+    f_ratio_array_rw[i] = lm_model_sim.fvalue
+#+end_src
+
+#+begin_src python
+# F比のヒストグラム
+sns.histplot(f_ratio_array_rw, stat="density", bins=100)
+#+end_src
+
+#+begin_example
+<Axes: ylabel='Density'>
+#+end_example
+
+#+caption: png
+[[file:2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_files/2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_26_1.png]]
+
+**** ゆがんだ標本分布と見せかけの回帰
+:PROPERTIES:
+:CUSTOM_ID: ゆがんだ標本分布と見せかけの回帰
+:END:
+#+begin_src python
+# 間違って帰無仮説を棄却してしまう確率
+sum(f_ratio_array_rw > stats.f.ppf(q=0.95, dfn=1, dfd=48)) / n_sim
+#+end_src
+
+#+begin_example
+0.668
+#+end_example
+
+*** 回帰係数のばらつき
+:PROPERTIES:
+:CUSTOM_ID: 回帰係数のばらつき
+:END:
+**** シミュレーションの実施
+:PROPERTIES:
+:CUSTOM_ID: シミュレーションの実施
+:END:
+#+begin_src python
+# シミュレーションの回数
+n_sim = 1000
+
+# 回帰係数を保存する入れ物
+coef_array    = np.zeros(n_sim)
+coef_array_rw = np.zeros(n_sim)
+
+# Durbin-Watson統計量を保存する入れ物
+dw_array    = np.zeros(n_sim)
+dw_array_rw = np.zeros(n_sim)
+
+# シミュレーションの実施
+np.random.seed(1)
+for i in range(1, n_sim):
+    # シミュレーションデータの生成
+    x = stats.norm.rvs(loc=0, scale=1, size=50)
+    y = stats.norm.rvs(loc=0, scale=1, size=50)
+    data_sim    = pd.DataFrame({"x":x,           "y":y})    
+    data_sim_rw = pd.DataFrame({"x":np.cumsum(x),"y":np.cumsum(y)})
+    
+    # モデル化
+    lm_model_sim    = smf.ols(formula='y ~ x', data=data_sim   ).fit()
+    lm_model_sim_rw = smf.ols(formula='y ~ x', data=data_sim_rw).fit()
+    
+    # 回帰係数の格納
+    coef_array[i]    = lm_model_sim.params['x']
+    coef_array_rw[i] = lm_model_sim_rw.params['x']
+    
+    # Durbin-Watson統計量の格納
+    dw_array[i]    = sm.stats.stattools.durbin_watson(lm_model_sim.resid)
+    dw_array_rw[i] = sm.stats.stattools.durbin_watson(lm_model_sim_rw.resid)
+#+end_src
+
+#+begin_src python
+# 回帰係数のヒストグラム
+sns.histplot(coef_array_rw, stat="density", label='RW', bins=50, color='red')
+sns.histplot(coef_array,    stat="density", label='WN', bins=50, color='blue')
+
+# 凡例
+plt.legend()
+#+end_src
+
+#+begin_example
+<matplotlib.legend.Legend at 0x1961b3642f0>
+#+end_example
+
+#+caption: png
+[[file:2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_files/2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_32_1.png]]
+
+#+begin_src python
+print('正規ホワイトノイズ系列の回帰係数', np.mean(coef_array))
+print('ランダムウォーク系列の回帰係数　', np.mean(coef_array_rw))
+#+end_src
+
+#+begin_example
+正規ホワイトノイズ系列の回帰係数 0.0040539533426812305
+ランダムウォーク系列の回帰係数　 0.04061012928383667
+#+end_example
+
+*** Durbin-Watson統計量
+:PROPERTIES:
+:CUSTOM_ID: durbin-watson統計量
+:END:
+**** 実装
+:PROPERTIES:
+:CUSTOM_ID: 実装
+:END:
+#+begin_src python
+# シミュレーションデータの生成
+np.random.seed(1)
+x_rw = np.cumsum(stats.norm.rvs(loc=0, scale=1, size=50))
+y_rw = np.cumsum(stats.norm.rvs(loc=0, scale=1, size=50))
+data_rw_sim = pd.DataFrame({"x":x_rw, "y":y_rw})
+
+# モデルの構築
+lm_model = smf.ols(formula='y ~ x', data=data_rw_sim).fit()
+
+# 結果の確認
+print(lm_model.summary())
+#+end_src
+
+#+begin_example
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:                      y   R-squared:                       0.498
+Model:                            OLS   Adj. R-squared:                  0.488
+Method:                 Least Squares   F-statistic:                     47.70
+Date:                Wed, 11 Sep 2024   Prob (F-statistic):           1.02e-08
+Time:                        16:40:54   Log-Likelihood:                -104.41
+No. Observations:                  50   AIC:                             212.8
+Df Residuals:                      48   BIC:                             216.6
+Df Model:                           1                                         
+Covariance Type:            nonrobust                                         
+==============================================================================
+                 coef    std err          t      P>|t|      [0.025      0.975]
+------------------------------------------------------------------------------
+Intercept      1.6401      0.466      3.518      0.001       0.703       2.577
+x             -1.0779      0.156     -6.906      0.000      -1.392      -0.764
+==============================================================================
+Omnibus:                        0.212   Durbin-Watson:                   0.419
+Prob(Omnibus):                  0.899   Jarque-Bera (JB):                0.134
+Skew:                          -0.118   Prob(JB):                        0.935
+Kurtosis:                       2.907   Cond. No.                         5.31
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
+#+end_example
+
+#+begin_src python
+# Durbin-Watson統計量の取得
+sm.stats.stattools.durbin_watson(lm_model.resid)
+#+end_src
+
+#+begin_example
+0.4189076267042925
+#+end_example
+
+#+begin_src python
+# Durbin-Watson統計量のヒストグラム
+sns.histplot(dw_array_rw, stat="density", label='RW', bins=50, color='red')
+sns.histplot(dw_array,    stat="density", label='WN', bins=50, color='blue')
+
+# 凡例
+plt.legend()
+#+end_src
+
+#+begin_example
+<matplotlib.legend.Legend at 0x1961b6dc650>
+#+end_example
+
+#+caption: png
+[[file:2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_files/2-6-%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E3%81%AE%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%A8%E8%A6%8B%E3%81%9B%E3%81%8B%E3%81%91%E3%81%AE%E5%9B%9E%E5%B8%B0_38_1.png]]

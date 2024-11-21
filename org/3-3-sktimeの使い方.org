@@ -1,0 +1,1099 @@
+* 第3部　基本的な時系列予測の手法
+:PROPERTIES:
+:CUSTOM_ID: 第3部-基本的な時系列予測の手法
+:END:
+** 第3章　sktimeの使い方
+:PROPERTIES:
+:CUSTOM_ID: 第3章-sktimeの使い方
+:END:
+*** 分析の準備
+:PROPERTIES:
+:CUSTOM_ID: 分析の準備
+:END:
+#+begin_src python
+# 数値計算に使うライブラリ
+import numpy as np
+import pandas as pd
+
+# グラフを描画するライブラリ
+from matplotlib import pyplot as plt
+import matplotlib.dates as mdates
+import seaborn as sns
+sns.set()
+
+# データ読み込みに利用
+import statsmodels.api as sm
+
+# sktime：グラフ描画
+from sktime.utils.plotting import plot_series
+
+# sktime：予測
+from sktime.forecasting.naive import NaiveForecaster
+from sktime.forecasting.trend import PolynomialTrendForecaster
+
+# sktime：予測の評価指標
+from sktime.performance_metrics.forecasting import (
+    mean_absolute_scaled_error, MeanAbsoluteError,
+    mean_absolute_percentage_error, mean_absolute_error
+)
+
+# sktime：予測の評価
+from sktime.forecasting.model_selection import (
+    temporal_train_test_split, ExpandingWindowSplitter, ForecastingGridSearchCV
+)
+from sktime.forecasting.model_evaluation import evaluate
+
+# sktime：データの変換
+from sktime.transformations.series.detrend import (
+    Deseasonalizer, Detrender
+)
+from sktime.transformations.series.difference import Differencer
+from sktime.transformations.series.boxcox import LogTransformer
+
+# sktime：パイプライン
+from sktime.forecasting.compose import (
+    TransformedTargetForecaster, MultiplexForecaster
+)
+from sktime.transformations.compose import OptionalPassthrough
+
+# グラフの日本語表記
+from matplotlib import rcParams
+rcParams['font.family'] = 'sans-serif'
+rcParams['font.sans-serif'] = 'Meiryo'
+#+end_src
+
+#+begin_src python
+# 表示設定
+np.set_printoptions(linewidth=60)
+pd.set_option('display.width', 80)
+
+from matplotlib.pylab import rcParams
+rcParams['figure.figsize'] = 8, 4
+#+end_src
+
+#+begin_src python
+# 飛行機乗客数データの読み込み
+air_passengers = sm.datasets.get_rdataset('AirPassengers').data
+
+# 日付インデックスの作成(PeriodIndex)
+date_index = pd.period_range(
+    start='1949-01', periods=len(air_passengers), freq='M')
+air_passengers.index = date_index
+
+# 不要な時間ラベルの削除
+air_passengers = air_passengers.drop(air_passengers.columns[0], axis=1)
+
+# 結果の確認
+print(air_passengers.head(3))
+#+end_src
+
+#+begin_example
+         value
+1949-01    112
+1949-02    118
+1949-03    132
+#+end_example
+
+*** PeriodIndexを持つデータの可視化
+:PROPERTIES:
+:CUSTOM_ID: periodindexを持つデータの可視化
+:END:
+#+begin_src python
+# これはエラーになるので注意
+
+# グラフサイズの指定
+# fig, ax = plt.subplots(figsize=(8, 4))
+
+# 折れ線グラフを描く
+# ax.plot(air_passengers['value'], label='原系列')
+#+end_src
+
+#+begin_src python
+# 参考：素朴にpandasのplot関数を適用
+
+# グラフサイズの指定
+fig, ax = plt.subplots(figsize=(8, 4))
+
+# 折れ線グラフを描く
+air_passengers.plot(ax=ax)
+#+end_src
+
+#+begin_example
+<Axes: >
+#+end_example
+
+#+caption: png
+[[file:3-3-sktime%E3%81%AE%E4%BD%BF%E3%81%84%E6%96%B9_files/3-3-sktime%E3%81%AE%E4%BD%BF%E3%81%84%E6%96%B9_7_1.png]]
+
+#+begin_src python
+# 参考：sktimeのplot_series関数を利用
+
+# 折れ線グラフを描く
+fig, ax = plot_series(air_passengers, labels=['原系列'], markers=[''])
+
+# グラフサイズの指定
+fig.set_size_inches(8, 4)
+#+end_src
+
+#+caption: png
+[[file:3-3-sktime%E3%81%AE%E4%BD%BF%E3%81%84%E6%96%B9_files/3-3-sktime%E3%81%AE%E4%BD%BF%E3%81%84%E6%96%B9_8_0.png]]
+
+*** データの分割
+:PROPERTIES:
+:CUSTOM_ID: データの分割
+:END:
+#+begin_src python
+# 訓練データとテストデータに分割する
+train, test = temporal_train_test_split(air_passengers, test_size=36)
+test.index
+#+end_src
+
+#+begin_example
+PeriodIndex(['1958-01', '1958-02', '1958-03', '1958-04', '1958-05', '1958-06',
+             '1958-07', '1958-08', '1958-09', '1958-10', '1958-11', '1958-12',
+             '1959-01', '1959-02', '1959-03', '1959-04', '1959-05', '1959-06',
+             '1959-07', '1959-08', '1959-09', '1959-10', '1959-11', '1959-12',
+             '1960-01', '1960-02', '1960-03', '1960-04', '1960-05', '1960-06',
+             '1960-07', '1960-08', '1960-09', '1960-10', '1960-11', '1960-12'],
+            dtype='period[M]')
+#+end_example
+
+#+begin_src python
+# 予測期間
+fh = np.arange(1, len(test) + 1)
+fh
+#+end_src
+
+#+begin_example
+array([ 1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13,
+       14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+       27, 28, 29, 30, 31, 32, 33, 34, 35, 36])
+#+end_example
+
+*** sktimeによる予測
+:PROPERTIES:
+:CUSTOM_ID: sktimeによる予測
+:END:
+**** 持続予測(ナイーブ予測)
+:PROPERTIES:
+:CUSTOM_ID: 持続予測ナイーブ予測
+:END:
+#+begin_src python
+# 予測手法の指定
+naive_forecaster = NaiveForecaster(strategy='last')
+
+# データへの当てはめ
+naive_forecaster.fit(train)
+
+# 予測の実施
+naive_pred = naive_forecaster.predict(fh)
+#+end_src
+
+#+begin_src python
+# 参考：fitとpredictを同時に実行
+print(naive_forecaster.fit_predict(y=train, fh=fh).head(3))
+#+end_src
+
+#+begin_example
+         value
+1958-01  336.0
+1958-02  336.0
+1958-03  336.0
+#+end_example
+
+**** 季節ナイーブ予測
+:PROPERTIES:
+:CUSTOM_ID: 季節ナイーブ予測
+:END:
+#+begin_src python
+# 予測手法の指定
+s_naive_forecaster = NaiveForecaster(strategy='last', sp=12)
+
+# データへの当てはめ
+s_naive_forecaster.fit(train)
+
+# 予測の実施
+s_naive_pred = s_naive_forecaster.predict(fh)
+#+end_src
+
+**** 平均値予測
+:PROPERTIES:
+:CUSTOM_ID: 平均値予測
+:END:
+#+begin_src python
+# 予測手法の指定
+mean_forecaster = NaiveForecaster(strategy='mean')
+
+# データへの当てはめ
+mean_forecaster.fit(train)
+
+# 予測の実施
+mean_pred = mean_forecaster.predict(fh)
+#+end_src
+
+**** 移動平均法による予測
+:PROPERTIES:
+:CUSTOM_ID: 移動平均法による予測
+:END:
+#+begin_src python
+# 予測手法の指定
+ma_forecaster = NaiveForecaster(strategy='mean', window_length=12)
+
+# データへの当てはめ
+ma_forecaster.fit(train)
+
+# 予測の実施
+ma_pred = ma_forecaster.predict(fh)
+#+end_src
+
+**** ドリフト予測
+:PROPERTIES:
+:CUSTOM_ID: ドリフト予測
+:END:
+#+begin_src python
+# 予測手法の指定
+drift_forecaster = NaiveForecaster(strategy='drift')
+
+# データへの当てはめ
+drift_forecaster.fit(train)
+
+# 予測の実施
+drift_pred = drift_forecaster.predict(fh)
+#+end_src
+
+*** sktimeによるクロスバリデーション
+:PROPERTIES:
+:CUSTOM_ID: sktimeによるクロスバリデーション
+:END:
+**** 1時点先予測による評価
+:PROPERTIES:
+:CUSTOM_ID: 時点先予測による評価
+:END:
+#+begin_src python
+# CVの設定
+# 1時点先予測を、データを1個ずつ増やしながら何度も繰り返す
+cv = ExpandingWindowSplitter(fh=1, initial_window=1, step_length=1)
+#+end_src
+
+#+begin_src python
+# CVの実行
+cv_df = evaluate(forecaster=naive_forecaster, cv=cv, y=train, 
+                 scoring=MeanAbsoluteError())
+print(cv_df.head(3))
+#+end_src
+
+#+begin_example
+   test_MeanAbsoluteError  fit_time  pred_time  len_train_window   cutoff
+0                     6.0  0.001365   0.004416                 1  1949-01
+1                    14.0  0.001189   0.003434                 2  1949-02
+2                     3.0  0.001129   0.003603                 3  1949-03
+#+end_example
+
+#+begin_src python
+# 1時点先予測のMAEの平均値
+cv_df.iloc[:, 0].mean()
+#+end_src
+
+#+begin_example
+20.317757009345794
+#+end_example
+
+#+begin_src python
+# 参考：MASEで使う標準エラー(naive_error)と一致する
+np.abs(train['1949-02':'1957-12'].values - train['1949-01':'1957-11'].values).mean()
+#+end_src
+
+#+begin_example
+20.317757009345794
+#+end_example
+
+**** 12時点先予測による評価
+:PROPERTIES:
+:CUSTOM_ID: 時点先予測による評価-1
+:END:
+#+begin_src python
+# CVの設定
+# 12時点先予測を、データを12個ずつ増やしながら何度も繰り返す
+cv = ExpandingWindowSplitter(fh=np.arange(1,13), initial_window=24, 
+                             step_length=12)
+
+# CVの実行
+cv_df = evaluate(forecaster=naive_forecaster, cv=cv, y=train,
+                 scoring=MeanAbsoluteError(), return_data=True)
+#+end_src
+
+#+begin_src python
+# 12時点先予測のMAEの平均値
+cv_df.iloc[:, 0].mean()
+#+end_src
+
+#+begin_example
+43.511904761904766
+#+end_example
+
+#+begin_src python
+# 参考：CVの結果の詳細
+cv_df.head(3)
+#+end_src
+
+#+begin_html
+  <style scoped>
+      .dataframe tbody tr th:only-of-type {
+          vertical-align: middle;
+      }
+
+      .dataframe tbody tr th {
+          vertical-align: top;
+      }
+
+      .dataframe thead th {
+          text-align: right;
+      }
+  </style>
+#+end_html
+
+#+begin_html
+  <table border="1" class="dataframe">
+#+end_html
+
+#+begin_html
+  <thead>
+#+end_html
+
+#+begin_html
+  <tr style="text-align: right;">
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+test_MeanAbsoluteError
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+fit_time
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+pred_time
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+len_train_window
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+cutoff
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+y_train
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+y_test
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+y_pred
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  </thead>
+#+end_html
+
+#+begin_html
+  <tbody>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+0
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+30.166667
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+0.001329
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+0.004528
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+24
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+1950-12
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+value 1949-01 112 1949-02 118 1...
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+value 1951-01 145 1951-02 150 1...
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+value 1951-01 140.0 1951-02 140.0 1...
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+1
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+31.000000
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+0.001232
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+0.003712
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+36
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+1951-12
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+value 1949-01 112 1949-02 118 1...
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+value 1952-01 171 1952-02 180 1...
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+value 1952-01 166.0 1952-02 166.0 1...
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+2
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+33.333333
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+0.001154
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+0.003466
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+48
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+1952-12
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+value 1949-01 112 1949-02 118 1...
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+value 1953-01 196 1953-02 196 1...
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+value 1953-01 194.0 1953-02 194.0 1...
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  </tbody>
+#+end_html
+
+#+begin_html
+  </table>
+#+end_html
+
+#+begin_src python
+# グラフの大きさなどの設定
+fig, ax = plt.subplots(figsize=(8, 4))
+
+# 実データのプロット
+train.plot(ax=ax)
+
+# CVの結果をまとめてグラフにする
+for i in np.arange(0, cv_df.shape[0]):
+    cv_df['y_pred'].iloc[i].plot(ax=ax)
+
+# 凡例
+plt.legend(['actual'] + ['CV ' + str(i) for i in range(cv_df.shape[0])])
+#+end_src
+
+#+begin_example
+<matplotlib.legend.Legend at 0x1abaebfb140>
+#+end_example
+
+#+caption: png
+[[file:3-3-sktime%E3%81%AE%E4%BD%BF%E3%81%84%E6%96%B9_files/3-3-sktime%E3%81%AE%E4%BD%BF%E3%81%84%E6%96%B9_34_1.png]]
+
+*** パイプラインの利用
+:PROPERTIES:
+:CUSTOM_ID: パイプラインの利用
+:END:
+**** 事例1：季節調整＋トレンド除去＋ナイーブ予測
+:PROPERTIES:
+:CUSTOM_ID: 事例1季節調整トレンド除去ナイーブ予測
+:END:
+#+begin_src python
+# 予測手法の指定
+# 前処理から予測までを1つのパイプラインにまとめる
+pipe_forecaster_1 = TransformedTargetForecaster(
+    [
+        ('deseasonalize', Deseasonalizer(model='multiplicative', sp=12)),
+        ('detrend', Detrender(forecaster=PolynomialTrendForecaster(degree=1), 
+                              model='multiplicative')),
+        ('forecast', NaiveForecaster(strategy='last')),
+    ]
+)
+#+end_src
+
+#+begin_src python
+# データへの当てはめ
+pipe_forecaster_1.fit(train)
+
+# 予測の実施
+pipe_pred_1 = pipe_forecaster_1.predict(fh)
+
+# 予測精度
+mean_absolute_error(test, pipe_pred_1)
+#+end_src
+
+#+begin_example
+23.600721546680017
+#+end_example
+
+#+begin_src python
+# CVの設定
+# 12時点先予測を、データを12個ずつ増やしながら何度も繰り返す
+cv = ExpandingWindowSplitter(fh=np.arange(1,13), initial_window=24, 
+                             step_length=12)
+
+# CVの実行
+cv_df = evaluate(forecaster=pipe_forecaster_1, cv=cv, y=train, 
+                 scoring=MeanAbsoluteError())
+
+# MAEの平均
+cv_df.iloc[:, 0].mean()
+#+end_src
+
+#+begin_example
+11.810688058465244
+#+end_example
+
+**** 事例2：差分によるトレンド除去＋季節ナイーブ
+:PROPERTIES:
+:CUSTOM_ID: 事例2差分によるトレンド除去季節ナイーブ
+:END:
+#+begin_src python
+# 予測手法の指定
+# 前処理から予測までを1つのパイプラインにまとめる
+pipe_forecaster_2 = TransformedTargetForecaster(
+    [
+        ('transform', Differencer(lags=[1])),
+        ('forecast', NaiveForecaster(strategy='last', sp=12))
+    ]
+)
+
+# データへの当てはめ
+pipe_forecaster_2.fit(train)
+
+# 予測の実施
+pipe_pred_2 = pipe_forecaster_2.predict(fh)
+
+# 予測精度
+mean_absolute_error(test, pipe_pred_2)
+#+end_src
+
+#+begin_example
+17.805555555555557
+#+end_example
+
+#+begin_src python
+# CVの実行
+evaluate(forecaster=pipe_forecaster_2, cv=cv, y=train, 
+         scoring=MeanAbsoluteError()).iloc[:, 0].mean()
+#+end_src
+
+#+begin_example
+11.13095238095238
+#+end_example
+
+#+begin_src python
+# 予測結果の可視化
+fig, ax = plot_series(train, test, pipe_pred_1, pipe_pred_2, 
+                      labels=['train', 'test', 'pipe_1', 'pipe_2'], 
+                      markers=np.tile('', 4))
+fig.set_size_inches(8, 4)
+#+end_src
+
+#+caption: png
+[[file:3-3-sktime%E3%81%AE%E4%BD%BF%E3%81%84%E6%96%B9_files/3-3-sktime%E3%81%AE%E4%BD%BF%E3%81%84%E6%96%B9_43_0.png]]
+
+*** ハイパーパラメータのチューニング
+:PROPERTIES:
+:CUSTOM_ID: ハイパーパラメータのチューニング
+:END:
+#+begin_src python
+# 持続予測
+naive_forecaster = NaiveForecaster(strategy='last', sp=1)
+
+# 持続予測のハイパーパラメータの候補
+param_grid = {'sp': np.arange(1,13)}
+
+# 予測器の作成
+best_naive_forecaster = ForecastingGridSearchCV(
+    naive_forecaster, strategy='refit', cv=cv, param_grid=param_grid, 
+    scoring=MeanAbsoluteError()
+)
+#+end_src
+
+#+begin_src python
+# データへの当てはめ
+best_naive_forecaster.fit(train)
+
+# 選ばれたパラメータ
+best_naive_forecaster.best_params_
+#+end_src
+
+#+begin_example
+{'sp': 12}
+#+end_example
+
+#+begin_src python
+# 参考：CVの結果の詳細
+print(best_naive_forecaster.cv_results_)
+#+end_src
+
+#+begin_example
+    mean_test_MeanAbsoluteError  mean_fit_time  mean_pred_time      params  \
+0                     43.511905       0.002088        0.006700   {'sp': 1}   
+1                     56.630952       0.001757        0.013251   {'sp': 2}   
+2                     52.178571       0.002072        0.014398   {'sp': 3}   
+3                     47.000000       0.001545        0.011148   {'sp': 4}   
+4                     49.702381       0.001769        0.013728   {'sp': 5}   
+5                     41.273810       0.001811        0.013635   {'sp': 6}   
+6                     43.500000       0.001449        0.012832   {'sp': 7}   
+7                     48.119048       0.001885        0.016918   {'sp': 8}   
+8                     41.285714       0.001690        0.014227   {'sp': 9}   
+9                     37.761905       0.001984        0.016294  {'sp': 10}   
+10                    35.571429       0.001725        0.017365  {'sp': 11}   
+11                    33.083333       0.001675        0.014793  {'sp': 12}   
+
+    rank_test_MeanAbsoluteError  
+0                           7.0  
+1                          12.0  
+2                          11.0  
+3                           8.0  
+4                          10.0  
+5                           4.0  
+6                           6.0  
+7                           9.0  
+8                           5.0  
+9                           3.0  
+10                          2.0  
+11                          1.0  
+#+end_example
+
+#+begin_src python
+# 予測の実施
+best_naive_pred = best_naive_forecaster.predict(fh)
+
+# 予測精度
+mean_absolute_error(test, best_naive_pred)
+#+end_src
+
+#+begin_example
+60.083333333333336
+#+end_example
+
+*** 予測手法の半自動選択
+:PROPERTIES:
+:CUSTOM_ID: 予測手法の半自動選択
+:END:
+**** 事例1：複数の予測手法からの選択
+:PROPERTIES:
+:CUSTOM_ID: 事例1複数の予測手法からの選択
+:END:
+#+begin_src python
+# 予測器の候補一覧
+forecast_options = MultiplexForecaster(
+    forecasters=[
+        ('s_naive', s_naive_forecaster),
+        ('pipe_1',  pipe_forecaster_1),
+        ('pipe_2',  pipe_forecaster_2)
+    ]
+)
+
+# 以下の予測から1つを選ぶ
+param_grid = {'selected_forecaster': ['s_naive', 'pipe_1', 'pipe_2']}
+
+# 予測器の作成
+cv_forecaster = ForecastingGridSearchCV(
+    forecast_options, strategy='refit', cv=cv, param_grid=param_grid, 
+    scoring=MeanAbsoluteError()
+)
+#+end_src
+
+#+begin_src python
+# データへの当てはめ
+cv_forecaster.fit(train)
+
+# CVで判断された最良の予測手法
+cv_forecaster.best_params_
+#+end_src
+
+#+begin_example
+{'selected_forecaster': 'pipe_2'}
+#+end_example
+
+#+begin_src python
+# 参考：CVの詳細な結果
+print(cv_forecaster.cv_results_[['mean_test_MeanAbsoluteError', 'params']])
+#+end_src
+
+#+begin_example
+   mean_test_MeanAbsoluteError                              params
+0                    33.083333  {'selected_forecaster': 's_naive'}
+1                    11.810688   {'selected_forecaster': 'pipe_1'}
+2                    11.130952   {'selected_forecaster': 'pipe_2'}
+#+end_example
+
+**** 事例2：対数変換の必要性の検討
+:PROPERTIES:
+:CUSTOM_ID: 事例2対数変換の必要性の検討
+:END:
+#+begin_src python
+# 前処理の有無＋予測器の候補
+pipe_select = TransformedTargetForecaster(
+    steps=[
+        ('log', OptionalPassthrough(LogTransformer())),
+        ('forecaster', MultiplexForecaster(
+            forecasters=[
+                ('s_naive', s_naive_forecaster),
+                ('pipe_1',  pipe_forecaster_1),
+                ('pipe_2',  pipe_forecaster_2)
+            ]
+        )),
+    ]
+)
+
+# 対数変換の有無・対象となる予測方法の一覧
+param_grid = {
+    'log__passthrough': [True, False],
+    'forecaster__selected_forecaster': ['s_naive', 'pipe_1', 'pipe_2'],
+}
+
+# 予測器の作成
+cv_pipe_forecaster = ForecastingGridSearchCV(
+    forecaster=pipe_select, param_grid=param_grid, 
+    cv=cv, scoring=MeanAbsoluteError()
+)
+#+end_src
+
+#+begin_src python
+# データへの当てはめ
+cv_pipe_forecaster.fit(train)
+
+# CVで判断された最良の予測手法
+cv_pipe_forecaster.best_params_
+#+end_src
+
+#+begin_example
+{'forecaster__selected_forecaster': 'pipe_1', 'log__passthrough': False}
+#+end_example
+
+#+begin_src python
+# CVの結果のうち、必要な列だけをコピーする
+result_df = cv_pipe_forecaster.cv_results_[
+    ['mean_test_MeanAbsoluteError', 'params']].copy()
+
+# パラメータの値だけをとり出して格納する
+result_df['params'] = result_df['params'].apply(lambda x: list(x.values()))
+
+# 結果の表示
+print(result_df)
+#+end_src
+
+#+begin_example
+   mean_test_MeanAbsoluteError            params
+0                    33.083333   [s_naive, True]
+1                    33.083333  [s_naive, False]
+2                    11.810688    [pipe_1, True]
+3                     9.090768   [pipe_1, False]
+4                    11.130952    [pipe_2, True]
+5                    10.881038   [pipe_2, False]
+#+end_example
+
+#+begin_src python
+# 予測の実施
+best_pred = cv_pipe_forecaster.predict(fh)
+
+# 予測精度
+mean_absolute_error(test, best_pred)
+#+end_src
+
+#+begin_example
+36.03614258141145
+#+end_example

@@ -1,0 +1,2651 @@
+* 第6部　機械学習法
+:PROPERTIES:
+:CUSTOM_ID: 第6部-機械学習法
+:END:
+** 第1章　機械学習法による時系列予測
+:PROPERTIES:
+:CUSTOM_ID: 第1章-機械学習法による時系列予測
+:END:
+*** 分析の準備
+:PROPERTIES:
+:CUSTOM_ID: 分析の準備
+:END:
+#+begin_src python
+# 数値計算に使うライブラリ
+import numpy as np
+import pandas as pd
+
+# グラフを描画するライブラリ
+from matplotlib import pyplot as plt
+import matplotlib.dates as mdates
+import seaborn as sns
+sns.set()
+
+# statsmodels
+import statsmodels.api as sm
+import statsmodels.tsa.api as tsa
+
+# sktime：グラフ描画
+from sktime.utils.plotting import plot_series
+
+# sktime：予測
+from sktime.forecasting.naive import NaiveForecaster
+from sktime.forecasting.trend import PolynomialTrendForecaster
+
+# sktime：予測の評価指標
+from sktime.performance_metrics.forecasting import (
+    mean_absolute_scaled_error, MeanAbsoluteError,
+    mean_absolute_percentage_error, mean_absolute_error
+)
+
+# sktime：予測の評価
+from sktime.forecasting.model_selection import (
+    temporal_train_test_split, ExpandingWindowSplitter, ForecastingGridSearchCV
+)
+from sktime.forecasting.model_evaluation import evaluate
+
+# sktime：データの変換
+from sktime.transformations.series.detrend import (
+    Deseasonalizer, Detrender
+)
+from sktime.transformations.series.difference import Differencer
+from sktime.transformations.series.boxcox import LogTransformer
+from sklearn.preprocessing import StandardScaler
+from sktime.transformations.series.adapt import TabularToSeriesAdaptor
+
+# sktime：パイプライン
+from sktime.forecasting.compose import (
+    TransformedTargetForecaster, MultiplexForecaster
+)
+from sktime.pipeline import make_pipeline
+from sktime.transformations.compose import OptionalPassthrough
+
+# 機械学習法
+import lightgbm as lgb
+
+# 再帰的に回帰分析を実行するための関数の読み込み
+from sktime.forecasting.compose import make_reduction
+
+# 周期性やトレンドの関する特徴量を作成
+from statsmodels.tsa.deterministic import DeterministicProcess
+
+# グラフの日本語表記
+from matplotlib import rcParams
+rcParams['font.family'] = 'sans-serif'
+rcParams['font.sans-serif'] = 'Meiryo'
+#+end_src
+
+#+begin_src python
+# 表示設定
+np.set_printoptions(linewidth=60)
+pd.set_option('display.width', 80)
+
+from matplotlib.pylab import rcParams
+rcParams['figure.figsize'] = 8, 4
+
+# Warningを出力させないようにする
+import warnings
+warnings.filterwarnings("ignore")
+#+end_src
+
+*** LightGBMによるオオヤマネコ個体数予測
+:PROPERTIES:
+:CUSTOM_ID: lightgbmによるオオヤマネコ個体数予測
+:END:
+**** オオヤマネコデータの読み込み
+:PROPERTIES:
+:CUSTOM_ID: オオヤマネコデータの読み込み
+:END:
+#+begin_src python
+# オオヤマネコデータの読み込み
+lynx = sm.datasets.get_rdataset('lynx').data
+
+# 日付インデックスの作成(PeriodIndex)
+date_index = pd.period_range(
+    start='1821-01', periods=len(lynx), freq='Y')
+lynx.index = date_index
+
+# 不要な時間ラベルの削除
+lynx = lynx.drop(lynx.columns[0], axis=1)
+
+# 結果の確認
+print(lynx.head(10))
+#+end_src
+
+#+begin_example
+      value
+1821    269
+1822    321
+1823    585
+1824    871
+1825   1475
+1826   2821
+1827   3928
+1828   5943
+1829   4950
+1830   2577
+#+end_example
+
+#+begin_src python
+# 参考：データの年数
+len(lynx)
+#+end_src
+
+#+begin_example
+114
+#+end_example
+
+#+begin_src python
+# 訓練データとテストデータに分割する
+train_lynx, test_lynx = temporal_train_test_split(lynx, test_size=10)
+
+# 折れ線グラフを描く
+fig, ax = plot_series(train_lynx, test_lynx, 
+                      labels=['train', 'test'], markers=np.tile('', 2))
+
+# グラフサイズの指定
+fig.set_size_inches(8, 4)
+#+end_src
+
+#+caption: png
+[[file:6-1-LightGBM_files/6-1-LightGBM_8_0.png]]
+
+#+begin_src python
+# 予測期間
+fh_lynx = np.arange(1, len(test_lynx) + 1)
+fh_lynx
+#+end_src
+
+#+begin_example
+array([ 1,  2,  3,  4,  5,  6,  7,  8,  9, 10])
+#+end_example
+
+**** ラグ特徴量の作成
+:PROPERTIES:
+:CUSTOM_ID: ラグ特徴量の作成
+:END:
+#+begin_src python
+# ラグデータの作成
+lag = 10
+
+lynx_lag = tsa.lagmat(
+    train_lynx, maxlag=lag, original='ex', trim='both', use_pandas=True)
+
+# 結果の確認
+print(lynx_lag.head(3))
+#+end_src
+
+#+begin_example
+      value.L.1  value.L.2  value.L.3  value.L.4  value.L.5  value.L.6  \
+1831     2577.0     4950.0     5943.0     3928.0     2821.0     1475.0   
+1832      523.0     2577.0     4950.0     5943.0     3928.0     2821.0   
+1833       98.0      523.0     2577.0     4950.0     5943.0     3928.0   
+
+      value.L.7  value.L.8  value.L.9  value.L.10  
+1831      871.0      585.0      321.0       269.0  
+1832     1475.0      871.0      585.0       321.0  
+1833     2821.0     1475.0      871.0       585.0  
+#+end_example
+
+#+begin_src python
+# 結果の確認
+print(train_lynx['1831':'1841'])
+#+end_src
+
+#+begin_example
+      value
+1831    523
+1832     98
+1833    184
+1834    279
+1835    409
+1836   2285
+1837   2685
+1838   3409
+1839   1824
+1840    409
+1841    151
+#+end_example
+
+**** モデルの推定
+:PROPERTIES:
+:CUSTOM_ID: モデルの推定
+:END:
+#+begin_src python
+# LightGBMのハイパーパラメータを設定
+params = {
+    'objective': 'regression',    # 回帰を目的とする
+    'seed': 1,                    # 乱数の種
+    'num_leaves': 20,             # 葉の数の最大値
+    'learning_rate': 0.05,        # 学習率
+    'n_estimators': 100,          # ブースティングの回数
+    'min_data_in_leaf': 1,        # 1つの葉における最小データ数
+    'verbose': -1                 # ワーニングなどの非表示
+}
+#+end_src
+
+#+begin_src python
+# モデル化
+gbm = lgb.LGBMRegressor(**params)
+
+# モデルの当てはめ
+gbm.fit(lynx_lag, train_lynx.loc['1831':])
+#+end_src
+
+#+begin_html
+  <style>#sk-container-id-1 {
+    /* Definition of color scheme common for light and dark mode */
+    --sklearn-color-text: black;
+    --sklearn-color-line: gray;
+    /* Definition of color scheme for unfitted estimators */
+    --sklearn-color-unfitted-level-0: #fff5e6;
+    --sklearn-color-unfitted-level-1: #f6e4d2;
+    --sklearn-color-unfitted-level-2: #ffe0b3;
+    --sklearn-color-unfitted-level-3: chocolate;
+    /* Definition of color scheme for fitted estimators */
+    --sklearn-color-fitted-level-0: #f0f8ff;
+    --sklearn-color-fitted-level-1: #d4ebff;
+    --sklearn-color-fitted-level-2: #b3dbfd;
+    --sklearn-color-fitted-level-3: cornflowerblue;
+
+    /* Specific color for light theme */
+    --sklearn-color-text-on-default-background: var(--sg-text-color, var(--theme-code-foreground, var(--jp-content-font-color1, black)));
+    --sklearn-color-background: var(--sg-background-color, var(--theme-background, var(--jp-layout-color0, white)));
+    --sklearn-color-border-box: var(--sg-text-color, var(--theme-code-foreground, var(--jp-content-font-color1, black)));
+    --sklearn-color-icon: #696969;
+
+    @media (prefers-color-scheme: dark) {
+      /* Redefinition of color scheme for dark theme */
+      --sklearn-color-text-on-default-background: var(--sg-text-color, var(--theme-code-foreground, var(--jp-content-font-color1, white)));
+      --sklearn-color-background: var(--sg-background-color, var(--theme-background, var(--jp-layout-color0, #111)));
+      --sklearn-color-border-box: var(--sg-text-color, var(--theme-code-foreground, var(--jp-content-font-color1, white)));
+      --sklearn-color-icon: #878787;
+    }
+  }
+
+  #sk-container-id-1 {
+    color: var(--sklearn-color-text);
+  }
+
+  #sk-container-id-1 pre {
+    padding: 0;
+  }
+
+  #sk-container-id-1 input.sk-hidden--visually {
+    border: 0;
+    clip: rect(1px 1px 1px 1px);
+    clip: rect(1px, 1px, 1px, 1px);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+  }
+
+  #sk-container-id-1 div.sk-dashed-wrapped {
+    border: 1px dashed var(--sklearn-color-line);
+    margin: 0 0.4em 0.5em 0.4em;
+    box-sizing: border-box;
+    padding-bottom: 0.4em;
+    background-color: var(--sklearn-color-background);
+  }
+
+  #sk-container-id-1 div.sk-container {
+    /* jupyter's `normalize.less` sets `[hidden] { display: none; }`
+       but bootstrap.min.css set `[hidden] { display: none !important; }`
+       so we also need the `!important` here to be able to override the
+       default hidden behavior on the sphinx rendered scikit-learn.org.
+       See: https://github.com/scikit-learn/scikit-learn/issues/21755 */
+    display: inline-block !important;
+    position: relative;
+  }
+
+  #sk-container-id-1 div.sk-text-repr-fallback {
+    display: none;
+  }
+
+  div.sk-parallel-item,
+  div.sk-serial,
+  div.sk-item {
+    /* draw centered vertical line to link estimators */
+    background-image: linear-gradient(var(--sklearn-color-text-on-default-background), var(--sklearn-color-text-on-default-background));
+    background-size: 2px 100%;
+    background-repeat: no-repeat;
+    background-position: center center;
+  }
+
+  /* Parallel-specific style estimator block */
+
+  #sk-container-id-1 div.sk-parallel-item::after {
+    content: "";
+    width: 100%;
+    border-bottom: 2px solid var(--sklearn-color-text-on-default-background);
+    flex-grow: 1;
+  }
+
+  #sk-container-id-1 div.sk-parallel {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    background-color: var(--sklearn-color-background);
+    position: relative;
+  }
+
+  #sk-container-id-1 div.sk-parallel-item {
+    display: flex;
+    flex-direction: column;
+  }
+
+  #sk-container-id-1 div.sk-parallel-item:first-child::after {
+    align-self: flex-end;
+    width: 50%;
+  }
+
+  #sk-container-id-1 div.sk-parallel-item:last-child::after {
+    align-self: flex-start;
+    width: 50%;
+  }
+
+  #sk-container-id-1 div.sk-parallel-item:only-child::after {
+    width: 0;
+  }
+
+  /* Serial-specific style estimator block */
+
+  #sk-container-id-1 div.sk-serial {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: var(--sklearn-color-background);
+    padding-right: 1em;
+    padding-left: 1em;
+  }
+
+
+  /* Toggleable style: style used for estimator/Pipeline/ColumnTransformer box that is
+  clickable and can be expanded/collapsed.
+  - Pipeline and ColumnTransformer use this feature and define the default style
+  - Estimators will overwrite some part of the style using the `sk-estimator` class
+  */
+
+  /* Pipeline and ColumnTransformer style (default) */
+
+  #sk-container-id-1 div.sk-toggleable {
+    /* Default theme specific background. It is overwritten whether we have a
+    specific estimator or a Pipeline/ColumnTransformer */
+    background-color: var(--sklearn-color-background);
+  }
+
+  /* Toggleable label */
+  #sk-container-id-1 label.sk-toggleable__label {
+    cursor: pointer;
+    display: block;
+    width: 100%;
+    margin-bottom: 0;
+    padding: 0.5em;
+    box-sizing: border-box;
+    text-align: center;
+  }
+
+  #sk-container-id-1 label.sk-toggleable__label-arrow:before {
+    /* Arrow on the left of the label */
+    content: "▸";
+    float: left;
+    margin-right: 0.25em;
+    color: var(--sklearn-color-icon);
+  }
+
+  #sk-container-id-1 label.sk-toggleable__label-arrow:hover:before {
+    color: var(--sklearn-color-text);
+  }
+
+  /* Toggleable content - dropdown */
+
+  #sk-container-id-1 div.sk-toggleable__content {
+    max-height: 0;
+    max-width: 0;
+    overflow: hidden;
+    text-align: left;
+    /* unfitted */
+    background-color: var(--sklearn-color-unfitted-level-0);
+  }
+
+  #sk-container-id-1 div.sk-toggleable__content.fitted {
+    /* fitted */
+    background-color: var(--sklearn-color-fitted-level-0);
+  }
+
+  #sk-container-id-1 div.sk-toggleable__content pre {
+    margin: 0.2em;
+    border-radius: 0.25em;
+    color: var(--sklearn-color-text);
+    /* unfitted */
+    background-color: var(--sklearn-color-unfitted-level-0);
+  }
+
+  #sk-container-id-1 div.sk-toggleable__content.fitted pre {
+    /* unfitted */
+    background-color: var(--sklearn-color-fitted-level-0);
+  }
+
+  #sk-container-id-1 input.sk-toggleable__control:checked~div.sk-toggleable__content {
+    /* Expand drop-down */
+    max-height: 200px;
+    max-width: 100%;
+    overflow: auto;
+  }
+
+  #sk-container-id-1 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {
+    content: "▾";
+  }
+
+  /* Pipeline/ColumnTransformer-specific style */
+
+  #sk-container-id-1 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {
+    color: var(--sklearn-color-text);
+    background-color: var(--sklearn-color-unfitted-level-2);
+  }
+
+  #sk-container-id-1 div.sk-label.fitted input.sk-toggleable__control:checked~label.sk-toggleable__label {
+    background-color: var(--sklearn-color-fitted-level-2);
+  }
+
+  /* Estimator-specific style */
+
+  /* Colorize estimator box */
+  #sk-container-id-1 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {
+    /* unfitted */
+    background-color: var(--sklearn-color-unfitted-level-2);
+  }
+
+  #sk-container-id-1 div.sk-estimator.fitted input.sk-toggleable__control:checked~label.sk-toggleable__label {
+    /* fitted */
+    background-color: var(--sklearn-color-fitted-level-2);
+  }
+
+  #sk-container-id-1 div.sk-label label.sk-toggleable__label,
+  #sk-container-id-1 div.sk-label label {
+    /* The background is the default theme color */
+    color: var(--sklearn-color-text-on-default-background);
+  }
+
+  /* On hover, darken the color of the background */
+  #sk-container-id-1 div.sk-label:hover label.sk-toggleable__label {
+    color: var(--sklearn-color-text);
+    background-color: var(--sklearn-color-unfitted-level-2);
+  }
+
+  /* Label box, darken color on hover, fitted */
+  #sk-container-id-1 div.sk-label.fitted:hover label.sk-toggleable__label.fitted {
+    color: var(--sklearn-color-text);
+    background-color: var(--sklearn-color-fitted-level-2);
+  }
+
+  /* Estimator label */
+
+  #sk-container-id-1 div.sk-label label {
+    font-family: monospace;
+    font-weight: bold;
+    display: inline-block;
+    line-height: 1.2em;
+  }
+
+  #sk-container-id-1 div.sk-label-container {
+    text-align: center;
+  }
+
+  /* Estimator-specific */
+  #sk-container-id-1 div.sk-estimator {
+    font-family: monospace;
+    border: 1px dotted var(--sklearn-color-border-box);
+    border-radius: 0.25em;
+    box-sizing: border-box;
+    margin-bottom: 0.5em;
+    /* unfitted */
+    background-color: var(--sklearn-color-unfitted-level-0);
+  }
+
+  #sk-container-id-1 div.sk-estimator.fitted {
+    /* fitted */
+    background-color: var(--sklearn-color-fitted-level-0);
+  }
+
+  /* on hover */
+  #sk-container-id-1 div.sk-estimator:hover {
+    /* unfitted */
+    background-color: var(--sklearn-color-unfitted-level-2);
+  }
+
+  #sk-container-id-1 div.sk-estimator.fitted:hover {
+    /* fitted */
+    background-color: var(--sklearn-color-fitted-level-2);
+  }
+
+  /* Specification for estimator info (e.g. "i" and "?") */
+
+  /* Common style for "i" and "?" */
+
+  .sk-estimator-doc-link,
+  a:link.sk-estimator-doc-link,
+  a:visited.sk-estimator-doc-link {
+    float: right;
+    font-size: smaller;
+    line-height: 1em;
+    font-family: monospace;
+    background-color: var(--sklearn-color-background);
+    border-radius: 1em;
+    height: 1em;
+    width: 1em;
+    text-decoration: none !important;
+    margin-left: 1ex;
+    /* unfitted */
+    border: var(--sklearn-color-unfitted-level-1) 1pt solid;
+    color: var(--sklearn-color-unfitted-level-1);
+  }
+
+  .sk-estimator-doc-link.fitted,
+  a:link.sk-estimator-doc-link.fitted,
+  a:visited.sk-estimator-doc-link.fitted {
+    /* fitted */
+    border: var(--sklearn-color-fitted-level-1) 1pt solid;
+    color: var(--sklearn-color-fitted-level-1);
+  }
+
+  /* On hover */
+  div.sk-estimator:hover .sk-estimator-doc-link:hover,
+  .sk-estimator-doc-link:hover,
+  div.sk-label-container:hover .sk-estimator-doc-link:hover,
+  .sk-estimator-doc-link:hover {
+    /* unfitted */
+    background-color: var(--sklearn-color-unfitted-level-3);
+    color: var(--sklearn-color-background);
+    text-decoration: none;
+  }
+
+  div.sk-estimator.fitted:hover .sk-estimator-doc-link.fitted:hover,
+  .sk-estimator-doc-link.fitted:hover,
+  div.sk-label-container:hover .sk-estimator-doc-link.fitted:hover,
+  .sk-estimator-doc-link.fitted:hover {
+    /* fitted */
+    background-color: var(--sklearn-color-fitted-level-3);
+    color: var(--sklearn-color-background);
+    text-decoration: none;
+  }
+
+  /* Span, style for the box shown on hovering the info icon */
+  .sk-estimator-doc-link span {
+    display: none;
+    z-index: 9999;
+    position: relative;
+    font-weight: normal;
+    right: .2ex;
+    padding: .5ex;
+    margin: .5ex;
+    width: min-content;
+    min-width: 20ex;
+    max-width: 50ex;
+    color: var(--sklearn-color-text);
+    box-shadow: 2pt 2pt 4pt #999;
+    /* unfitted */
+    background: var(--sklearn-color-unfitted-level-0);
+    border: .5pt solid var(--sklearn-color-unfitted-level-3);
+  }
+
+  .sk-estimator-doc-link.fitted span {
+    /* fitted */
+    background: var(--sklearn-color-fitted-level-0);
+    border: var(--sklearn-color-fitted-level-3);
+  }
+
+  .sk-estimator-doc-link:hover span {
+    display: block;
+  }
+
+  /* "?"-specific style due to the `<a>` HTML tag */
+
+  #sk-container-id-1 a.estimator_doc_link {
+    float: right;
+    font-size: 1rem;
+    line-height: 1em;
+    font-family: monospace;
+    background-color: var(--sklearn-color-background);
+    border-radius: 1rem;
+    height: 1rem;
+    width: 1rem;
+    text-decoration: none;
+    /* unfitted */
+    color: var(--sklearn-color-unfitted-level-1);
+    border: var(--sklearn-color-unfitted-level-1) 1pt solid;
+  }
+
+  #sk-container-id-1 a.estimator_doc_link.fitted {
+    /* fitted */
+    border: var(--sklearn-color-fitted-level-1) 1pt solid;
+    color: var(--sklearn-color-fitted-level-1);
+  }
+
+  /* On hover */
+  #sk-container-id-1 a.estimator_doc_link:hover {
+    /* unfitted */
+    background-color: var(--sklearn-color-unfitted-level-3);
+    color: var(--sklearn-color-background);
+    text-decoration: none;
+  }
+
+  #sk-container-id-1 a.estimator_doc_link.fitted:hover {
+    /* fitted */
+    background-color: var(--sklearn-color-fitted-level-3);
+  }
+  </style>
+#+end_html
+
+<<sk-container-id-1>>
+
+#+begin_html
+  <pre>LGBMRegressor(learning_rate=0.05, min_data_in_leaf=1, num_leaves=20,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1)</pre>
+#+end_html
+
+In a Jupyter environment, please rerun this cell to show the HTML
+representation or trust the notebook. On GitHub, the HTML representation
+is unable to render, please try loading this page with nbviewer.org.
+
+ LGBMRegressoriFitted
+
+#+begin_html
+  <pre>LGBMRegressor(learning_rate=0.05, min_data_in_leaf=1, num_leaves=20,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1)</pre>
+#+end_html
+
+**** 予測
+:PROPERTIES:
+:CUSTOM_ID: 予測
+:END:
+#+begin_src python
+# テストデータの最初の値
+print(test_lynx.head(1))
+#+end_src
+
+#+begin_example
+      value
+1925   3574
+#+end_example
+
+#+begin_src python
+# ラグデータの作成
+lynx_lag_all = tsa.lagmat(
+    lynx, maxlag=lag, original='ex', trim='both', use_pandas=True)
+
+# 結果の確認
+print(lynx_lag_all.loc['1925':'1925'])
+#+end_src
+
+#+begin_example
+      value.L.1  value.L.2  value.L.3  value.L.4  value.L.5  value.L.6  \
+1925     2432.0     1132.0      399.0      229.0      108.0       80.0   
+
+      value.L.7  value.L.8  value.L.9  value.L.10  
+1925       81.0      674.0     3790.0      2985.0  
+#+end_example
+
+#+begin_src python
+# testデータの最初の1年目を予測
+gbm.predict(lynx_lag_all.loc['1925':'1925'])
+#+end_src
+
+#+begin_example
+array([2281.66646241])
+#+end_example
+
+**** 長期予測
+:PROPERTIES:
+:CUSTOM_ID: 長期予測
+:END:
+#+begin_src python
+# 2時点先予測に使う説明変数
+x_target = lynx_lag_all.loc['1925':'1925'].copy()
+x_target.iloc[:, 1:] = x_target.iloc[:, 0:9]
+x_target.iloc[:, 0] = gbm.predict(lynx_lag_all.loc['1925':'1925'])[0]
+print(x_target)
+#+end_src
+
+#+begin_example
+        value.L.1  value.L.2  value.L.3  value.L.4  value.L.5  value.L.6  \
+1925  2281.666462     2432.0     1132.0      399.0      229.0      108.0   
+
+      value.L.7  value.L.8  value.L.9  value.L.10  
+1925       80.0       81.0      674.0      3790.0  
+#+end_example
+
+#+begin_src python
+# 2時点先の予測
+gbm.predict(x_target)
+#+end_src
+
+#+begin_example
+array([861.15379196])
+#+end_example
+
+*** sktimeを用いた効率的な実装
+:PROPERTIES:
+:CUSTOM_ID: sktimeを用いた効率的な実装
+:END:
+**** モデル化と予測
+:PROPERTIES:
+:CUSTOM_ID: モデル化と予測
+:END:
+#+begin_src python
+# 予測器(LightGBM)
+gbm_regressor = lgb.LGBMRegressor(**params)
+#+end_src
+
+#+begin_src python
+# 再帰的にLightGBMを実行
+gbm_forecaster = make_reduction(
+    gbm_regressor, window_length=lag, pooling='global',strategy="recursive")
+
+# モデルの当てはめ
+gbm_forecaster.fit(train_lynx)
+#+end_src
+
+#+begin_html
+  <style>#sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 {
+      /* Definition of color scheme common for light and dark mode */
+      --sklearn-color-text: black;
+      --sklearn-color-line: gray;
+      /* Definition of color scheme for objects */
+      --sklearn-color-level-0: #fff5e6;
+      --sklearn-color-level-1: #f6e4d2;
+      --sklearn-color-level-2: #ffe0b3;
+      --sklearn-color-level-3: chocolate;
+
+      /* Specific color for light theme */
+      --sklearn-color-text-on-default-background: var(--theme-code-foreground, var(--jp-content-font-color1, black));
+      --sklearn-color-background: var(--theme-background, var(--jp-layout-color0, white));
+      --sklearn-color-border-box: var(--theme-code-foreground, var(--jp-content-font-color1, black));
+      --sklearn-color-icon: #696969;
+
+      @media (prefers-color-scheme: dark) {
+        /* Redefinition of color scheme for dark theme */
+        --sklearn-color-text-on-default-background: var(--theme-code-foreground, var(--jp-content-font-color1, white));
+        --sklearn-color-background: var(--theme-background, var(--jp-layout-color0, #111));
+        --sklearn-color-border-box: var(--theme-code-foreground, var(--jp-content-font-color1, white));
+        --sklearn-color-icon: #878787;
+      }
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 {
+      color: var(--sklearn-color-text);
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 pre {
+      padding: 0;
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 input.sk-hidden--visually {
+      border: 0;
+      clip: rect(1px 1px 1px 1px);
+      clip: rect(1px, 1px, 1px, 1px);
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      padding: 0;
+      position: absolute;
+      width: 1px;
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-dashed-wrapped {
+      border: 1px dashed var(--sklearn-color-line);
+      margin: 0 0.4em 0.5em 0.4em;
+      box-sizing: border-box;
+      padding-bottom: 0.4em;
+      background-color: var(--sklearn-color-background);
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-container {
+      /* jupyter's `normalize.less` sets `[hidden] { display: none; }`
+         but bootstrap.min.css set `[hidden] { display: none !important; }`
+         so we also need the `!important` here to be able to override the
+         default hidden behavior on the sphinx rendered scikit-learn.org.
+         See: https://github.com/scikit-learn/scikit-learn/issues/21755 */
+      display: inline-block !important;
+      position: relative;
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-text-repr-fallback {
+      display: none;
+    }
+
+    div.sk-parallel-item,
+    div.sk-serial,
+    div.sk-item {
+      /* draw centered vertical line to link estimators */
+      background-image: linear-gradient(var(--sklearn-color-text-on-default-background), var(--sklearn-color-text-on-default-background));
+      background-size: 2px 100%;
+      background-repeat: no-repeat;
+      background-position: center center;
+    }
+
+    /* Parallel-specific style estimator block */
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-parallel-item::after {
+      content: "";
+      width: 100%;
+      border-bottom: 2px solid var(--sklearn-color-text-on-default-background);
+      flex-grow: 1;
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-parallel {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      background-color: var(--sklearn-color-background);
+      position: relative;
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-parallel-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-parallel-item:first-child::after {
+      align-self: flex-end;
+      width: 50%;
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-parallel-item:last-child::after {
+      align-self: flex-start;
+      width: 50%;
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-parallel-item:only-child::after {
+      width: 0;
+    }
+
+    /* Serial-specific style estimator block */
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-serial {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: var(--sklearn-color-background);
+      padding-right: 1em;
+      padding-left: 1em;
+    }
+
+
+    /* Toggleable style: style used for estimator/Pipeline/ColumnTransformer box that is
+    clickable and can be expanded/collapsed.
+    - Pipeline and ColumnTransformer use this feature and define the default style
+    - Estimators will overwrite some part of the style using the `sk-estimator` class
+    */
+
+    /* Pipeline and ColumnTransformer style (default) */
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-toggleable {
+      /* Default theme specific background. It is overwritten whether we have a
+      specific estimator or a Pipeline/ColumnTransformer */
+      background-color: var(--sklearn-color-background);
+    }
+
+    /* Toggleable label */
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 label.sk-toggleable__label {
+      cursor: pointer;
+      display: block;
+      width: 100%;
+      margin-bottom: 0;
+      padding: 0.5em;
+      box-sizing: border-box;
+      text-align: center;
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 label.sk-toggleable__label-arrow:before {
+      /* Arrow on the left of the label */
+      content: "笆ｸ";
+      float: left;
+      margin-right: 0.25em;
+      color: var(--sklearn-color-icon);
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 label.sk-toggleable__label-arrow:hover:before {
+      color: var(--sklearn-color-text);
+    }
+
+    /* Toggleable content - dropdown */
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-toggleable__content {
+      max-height: 0;
+      max-width: 0;
+      overflow: hidden;
+      text-align: left;
+      background-color: var(--sklearn-color-level-0);
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-toggleable__content pre {
+      margin: 0.2em;
+      border-radius: 0.25em;
+      color: var(--sklearn-color-text);
+      background-color: var(--sklearn-color-level-0);
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 input.sk-toggleable__control:checked~div.sk-toggleable__content {
+      /* Expand drop-down */
+      max-height: 200px;
+      max-width: 100%;
+      overflow: auto;
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {
+      content: "笆ｾ";
+    }
+
+    /* Pipeline/ColumnTransformer-specific style */
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {
+      color: var(--sklearn-color-text);
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    /* Estimator-specific style */
+
+    /* Colorize estimator box */
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {
+      /* unfitted */
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-label label.sk-toggleable__label,
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-label label {
+      /* The background is the default theme color */
+      color: var(--sklearn-color-text-on-default-background);
+    }
+
+    /* On hover, darken the color of the background */
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-label:hover label.sk-toggleable__label {
+      color: var(--sklearn-color-text);
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    /* Estimator label */
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-label label {
+      font-family: monospace;
+      font-weight: bold;
+      display: inline-block;
+      line-height: 1.2em;
+    }
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-label-container {
+      text-align: center;
+    }
+
+    /* Estimator-specific */
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-estimator {
+      font-family: monospace;
+      border: 1px dotted var(--sklearn-color-border-box);
+      border-radius: 0.25em;
+      box-sizing: border-box;
+      margin-bottom: 0.5em;
+      background-color: var(--sklearn-color-level-0);
+    }
+
+    /* on hover */
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 div.sk-estimator:hover {
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    /* Specification for estimator info */
+
+    .sk-estimator-doc-link,
+    a:link.sk-estimator-doc-link,
+    a:visited.sk-estimator-doc-link {
+      float: right;
+      font-size: smaller;
+      line-height: 1em;
+      font-family: monospace;
+      background-color: var(--sklearn-color-background);
+      border-radius: 1em;
+      height: 1em;
+      width: 1em;
+      text-decoration: none !important;
+      margin-left: 1ex;
+      border: var(--sklearn-color-level-1) 1pt solid;
+      color: var(--sklearn-color-level-1);
+    }
+
+    /* On hover */
+    div.sk-estimator:hover .sk-estimator-doc-link:hover,
+    .sk-estimator-doc-link:hover,
+    div.sk-label-container:hover .sk-estimator-doc-link:hover,
+    .sk-estimator-doc-link:hover {
+      background-color: var(--sklearn-color-level-3);
+      color: var(--sklearn-color-background);
+      text-decoration: none;
+    }
+
+    /* Span, style for the box shown on hovering the info icon */
+    .sk-estimator-doc-link span {
+      display: none;
+      z-index: 9999;
+      position: relative;
+      font-weight: normal;
+      right: .2ex;
+      padding: .5ex;
+      margin: .5ex;
+      width: min-content;
+      min-width: 20ex;
+      max-width: 50ex;
+      color: var(--sklearn-color-text);
+      box-shadow: 2pt 2pt 4pt #999;
+      background: var(--sklearn-color-level-0);
+      border: .5pt solid var(--sklearn-color-level-3);
+    }
+
+    .sk-estimator-doc-link:hover span {
+      display: block;
+    }
+
+    /* "?"-specific style due to the `<a>` HTML tag */
+
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 a.estimator_doc_link {
+      float: right;
+      font-size: 1rem;
+      line-height: 1em;
+      font-family: monospace;
+      background-color: var(--sklearn-color-background);
+      border-radius: 1rem;
+      height: 1rem;
+      width: 1rem;
+      text-decoration: none;
+      color: var(--sklearn-color-level-1);
+      border: var(--sklearn-color-level-1) 1pt solid;
+    }
+
+    /* On hover */
+    #sk-138893ec-141e-4e10-8eca-0d8ca8876cd5 a.estimator_doc_link:hover {
+      background-color: var(--sklearn-color-level-3);
+      color: var(--sklearn-color-background);
+      text-decoration: none;
+    }
+  </style>
+#+end_html
+
+<<sk-138893ec-141e-4e10-8eca-0d8ca8876cd5>>
+
+#+begin_html
+  <pre>RecursiveTabularRegressionForecaster(estimator=LGBMRegressor(learning_rate=0.05, min_data_in_leaf=1, num_leaves=20,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1),
+                                       pooling=&#x27;global&#x27;)</pre>
+#+end_html
+
+Please rerun this cell to show the HTML repr or trust the notebook.
+
+RecursiveTabularRegressionForecaster?Documentation for
+RecursiveTabularRegressionForecaster
+
+#+begin_html
+  <pre>RecursiveTabularRegressionForecaster(estimator=LGBMRegressor(learning_rate=0.05, min_data_in_leaf=1, num_leaves=20,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1),
+                                       pooling=&#x27;global&#x27;)</pre>
+#+end_html
+
+estimator: LGBMRegressor
+
+#+begin_html
+  <pre>LGBMRegressor(learning_rate=0.05, min_data_in_leaf=1, num_leaves=20,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1)</pre>
+#+end_html
+
+LGBMRegressor
+
+#+begin_html
+  <pre>LGBMRegressor(learning_rate=0.05, min_data_in_leaf=1, num_leaves=20,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1)</pre>
+#+end_html
+
+#+begin_src python
+# 予測の実施
+print(gbm_forecaster.predict([1, 2]))
+#+end_src
+
+#+begin_example
+            value
+1925  2281.666462
+1926   861.153792
+#+end_example
+
+**** モデルの取得
+:PROPERTIES:
+:CUSTOM_ID: モデルの取得
+:END:
+#+begin_src python
+mod = gbm_forecaster.get_fitted_params()['estimator']
+#+end_src
+
+#+begin_src python
+mod.predict(lynx_lag_all.loc['1925':'1925'])
+#+end_src
+
+#+begin_example
+array([2281.66646241])
+#+end_example
+
+**** 長期予測結果における予測精度
+:PROPERTIES:
+:CUSTOM_ID: 長期予測結果における予測精度
+:END:
+#+begin_src python
+# 長期予測の結果
+pred_lynx = gbm_forecaster.predict(fh_lynx)
+
+# 予測精度
+mae = mean_absolute_error(test_lynx, pred_lynx)
+mase = mean_absolute_scaled_error(
+    test_lynx, pred_lynx, y_train=train_lynx)
+
+print('MAE :', mae)
+print('MASE:', mase)
+#+end_src
+
+#+begin_example
+MAE : 1060.9801981784228
+MASE: 1.2597954972894985
+#+end_example
+
+*** ハイパーパラメータのチューニング
+:PROPERTIES:
+:CUSTOM_ID: ハイパーパラメータのチューニング
+:END:
+#+begin_src python
+# LightGBMのハイパーパラメータを設定
+# 意図的にlearning_rateをコメントアウトした
+params_2 = {
+    'objective': 'regression',    # 回帰を目的とする
+    'seed': 1,                    # 乱数の種
+    'num_leaves': 20,             # 葉の数の最大値
+#    'learning_rate': 0.05,        # 学習率
+    'n_estimators': 100,          # ブースティングの回数
+    'min_data_in_leaf': 1,        # 1つの葉における最小データ数
+    'verbose': -1                 # ワーニングなどの非表示
+}
+
+# モデル化
+gbm_sk = lgb.LGBMRegressor(**params_2)
+
+# 再帰的にLightGBMを実行
+gbm_forecaster = make_reduction(
+    gbm_sk, pooling='global', strategy="recursive")
+#+end_src
+
+#+begin_src python
+# ハイパーパラメータの候補
+param_grid = {'window_length': np.arange(1, 20),
+              'estimator__learning_rate': [0.01, 0.03, 0.05, 0.07, 0.09, 0.1]}
+
+# CVの設定
+cv = ExpandingWindowSplitter(fh=fh_lynx, initial_window=20, 
+                             step_length=10)
+
+# 予測器の作成
+best_gbm_forecaster_lynx = ForecastingGridSearchCV(
+    gbm_forecaster, strategy='refit', cv=cv, param_grid=param_grid, 
+    scoring=MeanAbsoluteError()
+)
+
+# モデルの当てはめ
+best_gbm_forecaster_lynx.fit(train_lynx)
+
+# 選ばれたパラメータ
+best_gbm_forecaster_lynx.best_params_
+#+end_src
+
+#+begin_example
+{'estimator__learning_rate': 0.07, 'window_length': 8}
+#+end_example
+
+#+begin_src python
+# 予測の実施
+best_gbm_pred_lynx = best_gbm_forecaster_lynx.predict(fh_lynx)
+
+# 予測精度
+mae = mean_absolute_error(test_lynx, best_gbm_pred_lynx)
+mase = mean_absolute_scaled_error(
+    test_lynx, best_gbm_pred_lynx, y_train=train_lynx)
+
+print('MAE :', mae)
+print('MASE:', mase)
+#+end_src
+
+#+begin_example
+MAE : 523.2653145686329
+MASE: 0.6213191238753725
+#+end_example
+
+#+begin_src python
+# 予測結果の可視化
+fig, ax = plot_series(train_lynx, test_lynx, pred_lynx, best_gbm_pred_lynx,
+                      labels=['train', 'test', 'LightGBM', 'LightGBM Best'], 
+                      markers=np.tile('', 4))
+fig.set_size_inches(8, 4)
+#+end_src
+
+#+caption: png
+[[file:6-1-LightGBM_files/6-1-LightGBM_37_0.png]]
+
+*** LightGBMによる飛行機乗客数予測
+:PROPERTIES:
+:CUSTOM_ID: lightgbmによる飛行機乗客数予測
+:END:
+**** 飛行機乗客数データの読み込み
+:PROPERTIES:
+:CUSTOM_ID: 飛行機乗客数データの読み込み
+:END:
+#+begin_src python
+# 飛行機乗客数データの読み込み
+air_passengers = sm.datasets.get_rdataset('AirPassengers').data
+
+# 日付インデックスの作成(PeriodIndex)
+date_index = pd.period_range(
+    start='1949-01', periods=len(air_passengers), freq='M')
+air_passengers.index = date_index
+
+# 不要な時間ラベルの削除
+air_passengers = air_passengers.drop(air_passengers.columns[0], axis=1)
+#+end_src
+
+#+begin_src python
+# 訓練データとテストデータに分割する
+train_air, test_air = temporal_train_test_split(air_passengers, test_size=36)
+
+# 予測期間
+fh_air = np.arange(1, len(test_air) + 1)
+#+end_src
+
+**** モデルの推定と予測
+:PROPERTIES:
+:CUSTOM_ID: モデルの推定と予測
+:END:
+#+begin_src python
+# LightGBMのハイパーパラメータを設定
+params_3 = {
+    'objective': 'regression',    # 回帰を目的とする
+    'seed': 1,                    # 乱数の種
+    'num_leaves': 60,             # 葉の数の最大値
+    'learning_rate': 0.07,        # 学習率
+    'n_estimators': 100,          # ブースティングの回数
+    'min_data_in_leaf': 4,        # 1つの葉における最小データ数
+    'verbose': -1                 # ワーニングなどの非表示
+}
+
+# モデル化
+gbm_sk_air = lgb.LGBMRegressor(**params_3)
+
+# 再帰的にLightGBMを実行
+gbm_forecaster_air = make_reduction(
+    gbm_sk_air, window_length=12, pooling='global', strategy="recursive")
+
+# モデルの当てはめ
+gbm_forecaster_air.fit(train_air)
+#+end_src
+
+#+begin_html
+  <style>#sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 {
+      /* Definition of color scheme common for light and dark mode */
+      --sklearn-color-text: black;
+      --sklearn-color-line: gray;
+      /* Definition of color scheme for objects */
+      --sklearn-color-level-0: #fff5e6;
+      --sklearn-color-level-1: #f6e4d2;
+      --sklearn-color-level-2: #ffe0b3;
+      --sklearn-color-level-3: chocolate;
+
+      /* Specific color for light theme */
+      --sklearn-color-text-on-default-background: var(--theme-code-foreground, var(--jp-content-font-color1, black));
+      --sklearn-color-background: var(--theme-background, var(--jp-layout-color0, white));
+      --sklearn-color-border-box: var(--theme-code-foreground, var(--jp-content-font-color1, black));
+      --sklearn-color-icon: #696969;
+
+      @media (prefers-color-scheme: dark) {
+        /* Redefinition of color scheme for dark theme */
+        --sklearn-color-text-on-default-background: var(--theme-code-foreground, var(--jp-content-font-color1, white));
+        --sklearn-color-background: var(--theme-background, var(--jp-layout-color0, #111));
+        --sklearn-color-border-box: var(--theme-code-foreground, var(--jp-content-font-color1, white));
+        --sklearn-color-icon: #878787;
+      }
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 {
+      color: var(--sklearn-color-text);
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 pre {
+      padding: 0;
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 input.sk-hidden--visually {
+      border: 0;
+      clip: rect(1px 1px 1px 1px);
+      clip: rect(1px, 1px, 1px, 1px);
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      padding: 0;
+      position: absolute;
+      width: 1px;
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-dashed-wrapped {
+      border: 1px dashed var(--sklearn-color-line);
+      margin: 0 0.4em 0.5em 0.4em;
+      box-sizing: border-box;
+      padding-bottom: 0.4em;
+      background-color: var(--sklearn-color-background);
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-container {
+      /* jupyter's `normalize.less` sets `[hidden] { display: none; }`
+         but bootstrap.min.css set `[hidden] { display: none !important; }`
+         so we also need the `!important` here to be able to override the
+         default hidden behavior on the sphinx rendered scikit-learn.org.
+         See: https://github.com/scikit-learn/scikit-learn/issues/21755 */
+      display: inline-block !important;
+      position: relative;
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-text-repr-fallback {
+      display: none;
+    }
+
+    div.sk-parallel-item,
+    div.sk-serial,
+    div.sk-item {
+      /* draw centered vertical line to link estimators */
+      background-image: linear-gradient(var(--sklearn-color-text-on-default-background), var(--sklearn-color-text-on-default-background));
+      background-size: 2px 100%;
+      background-repeat: no-repeat;
+      background-position: center center;
+    }
+
+    /* Parallel-specific style estimator block */
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-parallel-item::after {
+      content: "";
+      width: 100%;
+      border-bottom: 2px solid var(--sklearn-color-text-on-default-background);
+      flex-grow: 1;
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-parallel {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      background-color: var(--sklearn-color-background);
+      position: relative;
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-parallel-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-parallel-item:first-child::after {
+      align-self: flex-end;
+      width: 50%;
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-parallel-item:last-child::after {
+      align-self: flex-start;
+      width: 50%;
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-parallel-item:only-child::after {
+      width: 0;
+    }
+
+    /* Serial-specific style estimator block */
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-serial {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: var(--sklearn-color-background);
+      padding-right: 1em;
+      padding-left: 1em;
+    }
+
+
+    /* Toggleable style: style used for estimator/Pipeline/ColumnTransformer box that is
+    clickable and can be expanded/collapsed.
+    - Pipeline and ColumnTransformer use this feature and define the default style
+    - Estimators will overwrite some part of the style using the `sk-estimator` class
+    */
+
+    /* Pipeline and ColumnTransformer style (default) */
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-toggleable {
+      /* Default theme specific background. It is overwritten whether we have a
+      specific estimator or a Pipeline/ColumnTransformer */
+      background-color: var(--sklearn-color-background);
+    }
+
+    /* Toggleable label */
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 label.sk-toggleable__label {
+      cursor: pointer;
+      display: block;
+      width: 100%;
+      margin-bottom: 0;
+      padding: 0.5em;
+      box-sizing: border-box;
+      text-align: center;
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 label.sk-toggleable__label-arrow:before {
+      /* Arrow on the left of the label */
+      content: "笆ｸ";
+      float: left;
+      margin-right: 0.25em;
+      color: var(--sklearn-color-icon);
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 label.sk-toggleable__label-arrow:hover:before {
+      color: var(--sklearn-color-text);
+    }
+
+    /* Toggleable content - dropdown */
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-toggleable__content {
+      max-height: 0;
+      max-width: 0;
+      overflow: hidden;
+      text-align: left;
+      background-color: var(--sklearn-color-level-0);
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-toggleable__content pre {
+      margin: 0.2em;
+      border-radius: 0.25em;
+      color: var(--sklearn-color-text);
+      background-color: var(--sklearn-color-level-0);
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 input.sk-toggleable__control:checked~div.sk-toggleable__content {
+      /* Expand drop-down */
+      max-height: 200px;
+      max-width: 100%;
+      overflow: auto;
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {
+      content: "笆ｾ";
+    }
+
+    /* Pipeline/ColumnTransformer-specific style */
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {
+      color: var(--sklearn-color-text);
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    /* Estimator-specific style */
+
+    /* Colorize estimator box */
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {
+      /* unfitted */
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-label label.sk-toggleable__label,
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-label label {
+      /* The background is the default theme color */
+      color: var(--sklearn-color-text-on-default-background);
+    }
+
+    /* On hover, darken the color of the background */
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-label:hover label.sk-toggleable__label {
+      color: var(--sklearn-color-text);
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    /* Estimator label */
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-label label {
+      font-family: monospace;
+      font-weight: bold;
+      display: inline-block;
+      line-height: 1.2em;
+    }
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-label-container {
+      text-align: center;
+    }
+
+    /* Estimator-specific */
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-estimator {
+      font-family: monospace;
+      border: 1px dotted var(--sklearn-color-border-box);
+      border-radius: 0.25em;
+      box-sizing: border-box;
+      margin-bottom: 0.5em;
+      background-color: var(--sklearn-color-level-0);
+    }
+
+    /* on hover */
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 div.sk-estimator:hover {
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    /* Specification for estimator info */
+
+    .sk-estimator-doc-link,
+    a:link.sk-estimator-doc-link,
+    a:visited.sk-estimator-doc-link {
+      float: right;
+      font-size: smaller;
+      line-height: 1em;
+      font-family: monospace;
+      background-color: var(--sklearn-color-background);
+      border-radius: 1em;
+      height: 1em;
+      width: 1em;
+      text-decoration: none !important;
+      margin-left: 1ex;
+      border: var(--sklearn-color-level-1) 1pt solid;
+      color: var(--sklearn-color-level-1);
+    }
+
+    /* On hover */
+    div.sk-estimator:hover .sk-estimator-doc-link:hover,
+    .sk-estimator-doc-link:hover,
+    div.sk-label-container:hover .sk-estimator-doc-link:hover,
+    .sk-estimator-doc-link:hover {
+      background-color: var(--sklearn-color-level-3);
+      color: var(--sklearn-color-background);
+      text-decoration: none;
+    }
+
+    /* Span, style for the box shown on hovering the info icon */
+    .sk-estimator-doc-link span {
+      display: none;
+      z-index: 9999;
+      position: relative;
+      font-weight: normal;
+      right: .2ex;
+      padding: .5ex;
+      margin: .5ex;
+      width: min-content;
+      min-width: 20ex;
+      max-width: 50ex;
+      color: var(--sklearn-color-text);
+      box-shadow: 2pt 2pt 4pt #999;
+      background: var(--sklearn-color-level-0);
+      border: .5pt solid var(--sklearn-color-level-3);
+    }
+
+    .sk-estimator-doc-link:hover span {
+      display: block;
+    }
+
+    /* "?"-specific style due to the `<a>` HTML tag */
+
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 a.estimator_doc_link {
+      float: right;
+      font-size: 1rem;
+      line-height: 1em;
+      font-family: monospace;
+      background-color: var(--sklearn-color-background);
+      border-radius: 1rem;
+      height: 1rem;
+      width: 1rem;
+      text-decoration: none;
+      color: var(--sklearn-color-level-1);
+      border: var(--sklearn-color-level-1) 1pt solid;
+    }
+
+    /* On hover */
+    #sk-a7646ad6-041b-402d-a1d7-6595555a2cf5 a.estimator_doc_link:hover {
+      background-color: var(--sklearn-color-level-3);
+      color: var(--sklearn-color-background);
+      text-decoration: none;
+    }
+  </style>
+#+end_html
+
+<<sk-a7646ad6-041b-402d-a1d7-6595555a2cf5>>
+
+#+begin_html
+  <pre>RecursiveTabularRegressionForecaster(estimator=LGBMRegressor(learning_rate=0.07, min_data_in_leaf=4, num_leaves=60,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1),
+                                       pooling=&#x27;global&#x27;, window_length=12)</pre>
+#+end_html
+
+Please rerun this cell to show the HTML repr or trust the notebook.
+
+RecursiveTabularRegressionForecaster?Documentation for
+RecursiveTabularRegressionForecaster
+
+#+begin_html
+  <pre>RecursiveTabularRegressionForecaster(estimator=LGBMRegressor(learning_rate=0.07, min_data_in_leaf=4, num_leaves=60,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1),
+                                       pooling=&#x27;global&#x27;, window_length=12)</pre>
+#+end_html
+
+estimator: LGBMRegressor
+
+#+begin_html
+  <pre>LGBMRegressor(learning_rate=0.07, min_data_in_leaf=4, num_leaves=60,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1)</pre>
+#+end_html
+
+LGBMRegressor
+
+#+begin_html
+  <pre>LGBMRegressor(learning_rate=0.07, min_data_in_leaf=4, num_leaves=60,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1)</pre>
+#+end_html
+
+#+begin_src python
+# 予測の実施
+gbm_pred_air = gbm_forecaster_air.predict(fh_air)
+
+# 予測精度
+mae = mean_absolute_error(test_air, gbm_pred_air)
+mase = mean_absolute_scaled_error(
+    test_air, gbm_pred_air, y_train=train_air)
+
+print('MAE :', mae)
+print('MASE:', mase)
+#+end_src
+
+#+begin_example
+MAE : 44.46762896753749
+MASE: 2.188609153416059
+#+end_example
+
+*** 前処理による予測精度の改善
+:PROPERTIES:
+:CUSTOM_ID: 前処理による予測精度の改善
+:END:
+#+begin_src python
+detrend = Detrender(
+    forecaster=PolynomialTrendForecaster(degree=1), 
+    model='multiplicative')
+#+end_src
+
+#+begin_src python
+# 前処理からモデル化までを1つのパイプラインにまとめる
+pipe_gbm = TransformedTargetForecaster(
+    [
+        detrend,
+        ('forecast', make_reduction(
+            gbm_sk_air, window_length=12, pooling='global',
+            strategy="recursive")),
+    ]
+)
+
+# データへの当てはめ
+pipe_gbm.fit(train_air)
+#+end_src
+
+#+begin_html
+  <style>#sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 {
+      /* Definition of color scheme common for light and dark mode */
+      --sklearn-color-text: black;
+      --sklearn-color-line: gray;
+      /* Definition of color scheme for objects */
+      --sklearn-color-level-0: #fff5e6;
+      --sklearn-color-level-1: #f6e4d2;
+      --sklearn-color-level-2: #ffe0b3;
+      --sklearn-color-level-3: chocolate;
+
+      /* Specific color for light theme */
+      --sklearn-color-text-on-default-background: var(--theme-code-foreground, var(--jp-content-font-color1, black));
+      --sklearn-color-background: var(--theme-background, var(--jp-layout-color0, white));
+      --sklearn-color-border-box: var(--theme-code-foreground, var(--jp-content-font-color1, black));
+      --sklearn-color-icon: #696969;
+
+      @media (prefers-color-scheme: dark) {
+        /* Redefinition of color scheme for dark theme */
+        --sklearn-color-text-on-default-background: var(--theme-code-foreground, var(--jp-content-font-color1, white));
+        --sklearn-color-background: var(--theme-background, var(--jp-layout-color0, #111));
+        --sklearn-color-border-box: var(--theme-code-foreground, var(--jp-content-font-color1, white));
+        --sklearn-color-icon: #878787;
+      }
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 {
+      color: var(--sklearn-color-text);
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 pre {
+      padding: 0;
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 input.sk-hidden--visually {
+      border: 0;
+      clip: rect(1px 1px 1px 1px);
+      clip: rect(1px, 1px, 1px, 1px);
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      padding: 0;
+      position: absolute;
+      width: 1px;
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-dashed-wrapped {
+      border: 1px dashed var(--sklearn-color-line);
+      margin: 0 0.4em 0.5em 0.4em;
+      box-sizing: border-box;
+      padding-bottom: 0.4em;
+      background-color: var(--sklearn-color-background);
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-container {
+      /* jupyter's `normalize.less` sets `[hidden] { display: none; }`
+         but bootstrap.min.css set `[hidden] { display: none !important; }`
+         so we also need the `!important` here to be able to override the
+         default hidden behavior on the sphinx rendered scikit-learn.org.
+         See: https://github.com/scikit-learn/scikit-learn/issues/21755 */
+      display: inline-block !important;
+      position: relative;
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-text-repr-fallback {
+      display: none;
+    }
+
+    div.sk-parallel-item,
+    div.sk-serial,
+    div.sk-item {
+      /* draw centered vertical line to link estimators */
+      background-image: linear-gradient(var(--sklearn-color-text-on-default-background), var(--sklearn-color-text-on-default-background));
+      background-size: 2px 100%;
+      background-repeat: no-repeat;
+      background-position: center center;
+    }
+
+    /* Parallel-specific style estimator block */
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-parallel-item::after {
+      content: "";
+      width: 100%;
+      border-bottom: 2px solid var(--sklearn-color-text-on-default-background);
+      flex-grow: 1;
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-parallel {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      background-color: var(--sklearn-color-background);
+      position: relative;
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-parallel-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-parallel-item:first-child::after {
+      align-self: flex-end;
+      width: 50%;
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-parallel-item:last-child::after {
+      align-self: flex-start;
+      width: 50%;
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-parallel-item:only-child::after {
+      width: 0;
+    }
+
+    /* Serial-specific style estimator block */
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-serial {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: var(--sklearn-color-background);
+      padding-right: 1em;
+      padding-left: 1em;
+    }
+
+
+    /* Toggleable style: style used for estimator/Pipeline/ColumnTransformer box that is
+    clickable and can be expanded/collapsed.
+    - Pipeline and ColumnTransformer use this feature and define the default style
+    - Estimators will overwrite some part of the style using the `sk-estimator` class
+    */
+
+    /* Pipeline and ColumnTransformer style (default) */
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-toggleable {
+      /* Default theme specific background. It is overwritten whether we have a
+      specific estimator or a Pipeline/ColumnTransformer */
+      background-color: var(--sklearn-color-background);
+    }
+
+    /* Toggleable label */
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 label.sk-toggleable__label {
+      cursor: pointer;
+      display: block;
+      width: 100%;
+      margin-bottom: 0;
+      padding: 0.5em;
+      box-sizing: border-box;
+      text-align: center;
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 label.sk-toggleable__label-arrow:before {
+      /* Arrow on the left of the label */
+      content: "笆ｸ";
+      float: left;
+      margin-right: 0.25em;
+      color: var(--sklearn-color-icon);
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 label.sk-toggleable__label-arrow:hover:before {
+      color: var(--sklearn-color-text);
+    }
+
+    /* Toggleable content - dropdown */
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-toggleable__content {
+      max-height: 0;
+      max-width: 0;
+      overflow: hidden;
+      text-align: left;
+      background-color: var(--sklearn-color-level-0);
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-toggleable__content pre {
+      margin: 0.2em;
+      border-radius: 0.25em;
+      color: var(--sklearn-color-text);
+      background-color: var(--sklearn-color-level-0);
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 input.sk-toggleable__control:checked~div.sk-toggleable__content {
+      /* Expand drop-down */
+      max-height: 200px;
+      max-width: 100%;
+      overflow: auto;
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {
+      content: "笆ｾ";
+    }
+
+    /* Pipeline/ColumnTransformer-specific style */
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {
+      color: var(--sklearn-color-text);
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    /* Estimator-specific style */
+
+    /* Colorize estimator box */
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {
+      /* unfitted */
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-label label.sk-toggleable__label,
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-label label {
+      /* The background is the default theme color */
+      color: var(--sklearn-color-text-on-default-background);
+    }
+
+    /* On hover, darken the color of the background */
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-label:hover label.sk-toggleable__label {
+      color: var(--sklearn-color-text);
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    /* Estimator label */
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-label label {
+      font-family: monospace;
+      font-weight: bold;
+      display: inline-block;
+      line-height: 1.2em;
+    }
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-label-container {
+      text-align: center;
+    }
+
+    /* Estimator-specific */
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-estimator {
+      font-family: monospace;
+      border: 1px dotted var(--sklearn-color-border-box);
+      border-radius: 0.25em;
+      box-sizing: border-box;
+      margin-bottom: 0.5em;
+      background-color: var(--sklearn-color-level-0);
+    }
+
+    /* on hover */
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 div.sk-estimator:hover {
+      background-color: var(--sklearn-color-level-2);
+    }
+
+    /* Specification for estimator info */
+
+    .sk-estimator-doc-link,
+    a:link.sk-estimator-doc-link,
+    a:visited.sk-estimator-doc-link {
+      float: right;
+      font-size: smaller;
+      line-height: 1em;
+      font-family: monospace;
+      background-color: var(--sklearn-color-background);
+      border-radius: 1em;
+      height: 1em;
+      width: 1em;
+      text-decoration: none !important;
+      margin-left: 1ex;
+      border: var(--sklearn-color-level-1) 1pt solid;
+      color: var(--sklearn-color-level-1);
+    }
+
+    /* On hover */
+    div.sk-estimator:hover .sk-estimator-doc-link:hover,
+    .sk-estimator-doc-link:hover,
+    div.sk-label-container:hover .sk-estimator-doc-link:hover,
+    .sk-estimator-doc-link:hover {
+      background-color: var(--sklearn-color-level-3);
+      color: var(--sklearn-color-background);
+      text-decoration: none;
+    }
+
+    /* Span, style for the box shown on hovering the info icon */
+    .sk-estimator-doc-link span {
+      display: none;
+      z-index: 9999;
+      position: relative;
+      font-weight: normal;
+      right: .2ex;
+      padding: .5ex;
+      margin: .5ex;
+      width: min-content;
+      min-width: 20ex;
+      max-width: 50ex;
+      color: var(--sklearn-color-text);
+      box-shadow: 2pt 2pt 4pt #999;
+      background: var(--sklearn-color-level-0);
+      border: .5pt solid var(--sklearn-color-level-3);
+    }
+
+    .sk-estimator-doc-link:hover span {
+      display: block;
+    }
+
+    /* "?"-specific style due to the `<a>` HTML tag */
+
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 a.estimator_doc_link {
+      float: right;
+      font-size: 1rem;
+      line-height: 1em;
+      font-family: monospace;
+      background-color: var(--sklearn-color-background);
+      border-radius: 1rem;
+      height: 1rem;
+      width: 1rem;
+      text-decoration: none;
+      color: var(--sklearn-color-level-1);
+      border: var(--sklearn-color-level-1) 1pt solid;
+    }
+
+    /* On hover */
+    #sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886 a.estimator_doc_link:hover {
+      background-color: var(--sklearn-color-level-3);
+      color: var(--sklearn-color-background);
+      text-decoration: none;
+    }
+  </style>
+#+end_html
+
+<<sk-572b84bc-da2d-4d9b-9d1e-fc6451c8b886>>
+
+#+begin_html
+  <pre>TransformedTargetForecaster(steps=[Detrender(forecaster=PolynomialTrendForecaster(),
+                                               model=&#x27;multiplicative&#x27;),
+                                     (&#x27;forecast&#x27;,
+                                      RecursiveTabularRegressionForecaster(estimator=LGBMRegressor(learning_rate=0.07, min_data_in_leaf=4, num_leaves=60,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1),
+                                                                           pooling=&#x27;global&#x27;,
+                                                                           window_length=12))])</pre>
+#+end_html
+
+Please rerun this cell to show the HTML repr or trust the notebook.
+
+TransformedTargetForecaster?Documentation for
+TransformedTargetForecaster
+
+#+begin_html
+  <pre>TransformedTargetForecaster(steps=[Detrender(forecaster=PolynomialTrendForecaster(),
+                                               model=&#x27;multiplicative&#x27;),
+                                     (&#x27;forecast&#x27;,
+                                      RecursiveTabularRegressionForecaster(estimator=LGBMRegressor(learning_rate=0.07, min_data_in_leaf=4, num_leaves=60,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1),
+                                                                           pooling=&#x27;global&#x27;,
+                                                                           window_length=12))])</pre>
+#+end_html
+
+Detrender?Documentation for Detrender
+
+#+begin_html
+  <pre>Detrender(forecaster=PolynomialTrendForecaster(), model=&#x27;multiplicative&#x27;)</pre>
+#+end_html
+
+forecaster: PolynomialTrendForecaster
+
+#+begin_html
+  <pre>PolynomialTrendForecaster()</pre>
+#+end_html
+
+PolynomialTrendForecaster?Documentation for PolynomialTrendForecaster
+
+#+begin_html
+  <pre>PolynomialTrendForecaster()</pre>
+#+end_html
+
+forecast?Documentation for forecast
+
+#+begin_html
+  <pre>RecursiveTabularRegressionForecaster(estimator=LGBMRegressor(learning_rate=0.07, min_data_in_leaf=4, num_leaves=60,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1),
+                                       pooling=&#x27;global&#x27;, window_length=12)</pre>
+#+end_html
+
+estimator: LGBMRegressor
+
+#+begin_html
+  <pre>LGBMRegressor(learning_rate=0.07, min_data_in_leaf=4, num_leaves=60,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1)</pre>
+#+end_html
+
+LGBMRegressor
+
+#+begin_html
+  <pre>LGBMRegressor(learning_rate=0.07, min_data_in_leaf=4, num_leaves=60,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1)</pre>
+#+end_html
+
+#+begin_src python
+# 予測の実施
+pipe_gbm_pred = pipe_gbm.predict(fh_air)
+
+# 予測精度
+mae = mean_absolute_error(test_air, pipe_gbm_pred)
+mase = mean_absolute_scaled_error(
+    test_air, pipe_gbm_pred, y_train=train_air)
+
+print('MAE :', mae)
+print('MASE:', mase)
+#+end_src
+
+#+begin_example
+MAE : 18.329759413136898
+MASE: 0.902154672127713
+#+end_example
+
+*** 周期性を表現する特徴量の利用
+:PROPERTIES:
+:CUSTOM_ID: 周期性を表現する特徴量の利用
+:END:
+**** 特徴量の生成
+:PROPERTIES:
+:CUSTOM_ID: 特徴量の生成
+:END:
+#+begin_src python
+dp = DeterministicProcess(
+    train_air.index, constant=False, order=1, period=12, fourier=6)
+
+# 訓練データ
+x_train = dp.in_sample()
+
+# 確認
+print(x_train.head(3))
+#+end_src
+
+#+begin_example
+         trend  sin(1,12)  cos(1,12)  sin(2,12)  cos(2,12)     sin(3,12)  \
+1949-01    1.0   0.000000   1.000000   0.000000        1.0  0.000000e+00   
+1949-02    2.0   0.500000   0.866025   0.866025        0.5  1.000000e+00   
+1949-03    3.0   0.866025   0.500000   0.866025       -0.5  1.224647e-16   
+
+            cos(3,12)  sin(4,12)  cos(4,12)  sin(5,12)  cos(5,12)  \
+1949-01  1.000000e+00   0.000000        1.0   0.000000   1.000000   
+1949-02  6.123234e-17   0.866025       -0.5   0.500000  -0.866025   
+1949-03 -1.000000e+00  -0.866025       -0.5  -0.866025   0.500000   
+
+            sin(6,12)  cos(6,12)  
+1949-01  0.000000e+00        1.0  
+1949-02  1.224647e-16       -1.0  
+1949-03 -2.449294e-16        1.0  
+#+end_example
+
+#+begin_src python
+# 訓練データの列名の変更
+x_train.columns = ["trend_1"] + ["seasonal_" + str(x) for x in range(6 * 2)]
+
+# テストデータ
+x_test = dp.out_of_sample(len(test_air))
+
+# テストデータの列名の変更
+x_test.columns = ["trend_1"] + ["seasonal_" + str(x) for x in range(6 * 2)]
+
+# 確認
+print(x_test.head(3))
+#+end_src
+
+#+begin_example
+         trend_1    seasonal_0  seasonal_1    seasonal_2  seasonal_3  \
+1958-01    109.0 -2.204364e-15    1.000000 -4.408728e-15         1.0   
+1958-02    110.0  5.000000e-01    0.866025  8.660254e-01         0.5   
+1958-03    111.0  8.660254e-01    0.500000  8.660254e-01        -0.5   
+
+           seasonal_4    seasonal_5    seasonal_6  seasonal_7    seasonal_8  \
+1958-01 -1.371852e-14  1.000000e+00 -8.817457e-15         1.0 -3.916394e-15   
+1958-02  1.000000e+00 -9.312886e-15  8.660254e-01        -0.5  5.000000e-01   
+1958-03  2.449913e-14 -1.000000e+00 -8.660254e-01        -0.5 -8.660254e-01   
+
+         seasonal_9   seasonal_10  seasonal_11  
+1958-01    1.000000 -2.743704e-14          1.0  
+1958-02   -0.866025 -1.862577e-14         -1.0  
+1958-03    0.500000 -4.899825e-14          1.0  
+#+end_example
+
+#+begin_src python
+# 参考：周期性を表現する特徴量
+x_test.iloc[:, 1:4].plot()
+#+end_src
+
+#+begin_example
+<Axes: >
+#+end_example
+
+#+caption: png
+[[file:6-1-LightGBM_files/6-1-LightGBM_53_1.png]]
+
+**** モデルの推定
+:PROPERTIES:
+:CUSTOM_ID: モデルの推定-1
+:END:
+#+begin_src python
+# 前処理
+transed = detrend.fit_transform(train_air)
+
+# モデル化
+gbm_reg = lgb.LGBMRegressor(**params_3)
+
+# モデルの当てはめ
+gbm_reg.fit(x_train, transed)
+#+end_src
+
+#+begin_html
+  <style>#sk-container-id-2 {
+    /* Definition of color scheme common for light and dark mode */
+    --sklearn-color-text: black;
+    --sklearn-color-line: gray;
+    /* Definition of color scheme for unfitted estimators */
+    --sklearn-color-unfitted-level-0: #fff5e6;
+    --sklearn-color-unfitted-level-1: #f6e4d2;
+    --sklearn-color-unfitted-level-2: #ffe0b3;
+    --sklearn-color-unfitted-level-3: chocolate;
+    /* Definition of color scheme for fitted estimators */
+    --sklearn-color-fitted-level-0: #f0f8ff;
+    --sklearn-color-fitted-level-1: #d4ebff;
+    --sklearn-color-fitted-level-2: #b3dbfd;
+    --sklearn-color-fitted-level-3: cornflowerblue;
+
+    /* Specific color for light theme */
+    --sklearn-color-text-on-default-background: var(--sg-text-color, var(--theme-code-foreground, var(--jp-content-font-color1, black)));
+    --sklearn-color-background: var(--sg-background-color, var(--theme-background, var(--jp-layout-color0, white)));
+    --sklearn-color-border-box: var(--sg-text-color, var(--theme-code-foreground, var(--jp-content-font-color1, black)));
+    --sklearn-color-icon: #696969;
+
+    @media (prefers-color-scheme: dark) {
+      /* Redefinition of color scheme for dark theme */
+      --sklearn-color-text-on-default-background: var(--sg-text-color, var(--theme-code-foreground, var(--jp-content-font-color1, white)));
+      --sklearn-color-background: var(--sg-background-color, var(--theme-background, var(--jp-layout-color0, #111)));
+      --sklearn-color-border-box: var(--sg-text-color, var(--theme-code-foreground, var(--jp-content-font-color1, white)));
+      --sklearn-color-icon: #878787;
+    }
+  }
+
+  #sk-container-id-2 {
+    color: var(--sklearn-color-text);
+  }
+
+  #sk-container-id-2 pre {
+    padding: 0;
+  }
+
+  #sk-container-id-2 input.sk-hidden--visually {
+    border: 0;
+    clip: rect(1px 1px 1px 1px);
+    clip: rect(1px, 1px, 1px, 1px);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+  }
+
+  #sk-container-id-2 div.sk-dashed-wrapped {
+    border: 1px dashed var(--sklearn-color-line);
+    margin: 0 0.4em 0.5em 0.4em;
+    box-sizing: border-box;
+    padding-bottom: 0.4em;
+    background-color: var(--sklearn-color-background);
+  }
+
+  #sk-container-id-2 div.sk-container {
+    /* jupyter's `normalize.less` sets `[hidden] { display: none; }`
+       but bootstrap.min.css set `[hidden] { display: none !important; }`
+       so we also need the `!important` here to be able to override the
+       default hidden behavior on the sphinx rendered scikit-learn.org.
+       See: https://github.com/scikit-learn/scikit-learn/issues/21755 */
+    display: inline-block !important;
+    position: relative;
+  }
+
+  #sk-container-id-2 div.sk-text-repr-fallback {
+    display: none;
+  }
+
+  div.sk-parallel-item,
+  div.sk-serial,
+  div.sk-item {
+    /* draw centered vertical line to link estimators */
+    background-image: linear-gradient(var(--sklearn-color-text-on-default-background), var(--sklearn-color-text-on-default-background));
+    background-size: 2px 100%;
+    background-repeat: no-repeat;
+    background-position: center center;
+  }
+
+  /* Parallel-specific style estimator block */
+
+  #sk-container-id-2 div.sk-parallel-item::after {
+    content: "";
+    width: 100%;
+    border-bottom: 2px solid var(--sklearn-color-text-on-default-background);
+    flex-grow: 1;
+  }
+
+  #sk-container-id-2 div.sk-parallel {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    background-color: var(--sklearn-color-background);
+    position: relative;
+  }
+
+  #sk-container-id-2 div.sk-parallel-item {
+    display: flex;
+    flex-direction: column;
+  }
+
+  #sk-container-id-2 div.sk-parallel-item:first-child::after {
+    align-self: flex-end;
+    width: 50%;
+  }
+
+  #sk-container-id-2 div.sk-parallel-item:last-child::after {
+    align-self: flex-start;
+    width: 50%;
+  }
+
+  #sk-container-id-2 div.sk-parallel-item:only-child::after {
+    width: 0;
+  }
+
+  /* Serial-specific style estimator block */
+
+  #sk-container-id-2 div.sk-serial {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: var(--sklearn-color-background);
+    padding-right: 1em;
+    padding-left: 1em;
+  }
+
+
+  /* Toggleable style: style used for estimator/Pipeline/ColumnTransformer box that is
+  clickable and can be expanded/collapsed.
+  - Pipeline and ColumnTransformer use this feature and define the default style
+  - Estimators will overwrite some part of the style using the `sk-estimator` class
+  */
+
+  /* Pipeline and ColumnTransformer style (default) */
+
+  #sk-container-id-2 div.sk-toggleable {
+    /* Default theme specific background. It is overwritten whether we have a
+    specific estimator or a Pipeline/ColumnTransformer */
+    background-color: var(--sklearn-color-background);
+  }
+
+  /* Toggleable label */
+  #sk-container-id-2 label.sk-toggleable__label {
+    cursor: pointer;
+    display: block;
+    width: 100%;
+    margin-bottom: 0;
+    padding: 0.5em;
+    box-sizing: border-box;
+    text-align: center;
+  }
+
+  #sk-container-id-2 label.sk-toggleable__label-arrow:before {
+    /* Arrow on the left of the label */
+    content: "▸";
+    float: left;
+    margin-right: 0.25em;
+    color: var(--sklearn-color-icon);
+  }
+
+  #sk-container-id-2 label.sk-toggleable__label-arrow:hover:before {
+    color: var(--sklearn-color-text);
+  }
+
+  /* Toggleable content - dropdown */
+
+  #sk-container-id-2 div.sk-toggleable__content {
+    max-height: 0;
+    max-width: 0;
+    overflow: hidden;
+    text-align: left;
+    /* unfitted */
+    background-color: var(--sklearn-color-unfitted-level-0);
+  }
+
+  #sk-container-id-2 div.sk-toggleable__content.fitted {
+    /* fitted */
+    background-color: var(--sklearn-color-fitted-level-0);
+  }
+
+  #sk-container-id-2 div.sk-toggleable__content pre {
+    margin: 0.2em;
+    border-radius: 0.25em;
+    color: var(--sklearn-color-text);
+    /* unfitted */
+    background-color: var(--sklearn-color-unfitted-level-0);
+  }
+
+  #sk-container-id-2 div.sk-toggleable__content.fitted pre {
+    /* unfitted */
+    background-color: var(--sklearn-color-fitted-level-0);
+  }
+
+  #sk-container-id-2 input.sk-toggleable__control:checked~div.sk-toggleable__content {
+    /* Expand drop-down */
+    max-height: 200px;
+    max-width: 100%;
+    overflow: auto;
+  }
+
+  #sk-container-id-2 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {
+    content: "▾";
+  }
+
+  /* Pipeline/ColumnTransformer-specific style */
+
+  #sk-container-id-2 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {
+    color: var(--sklearn-color-text);
+    background-color: var(--sklearn-color-unfitted-level-2);
+  }
+
+  #sk-container-id-2 div.sk-label.fitted input.sk-toggleable__control:checked~label.sk-toggleable__label {
+    background-color: var(--sklearn-color-fitted-level-2);
+  }
+
+  /* Estimator-specific style */
+
+  /* Colorize estimator box */
+  #sk-container-id-2 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {
+    /* unfitted */
+    background-color: var(--sklearn-color-unfitted-level-2);
+  }
+
+  #sk-container-id-2 div.sk-estimator.fitted input.sk-toggleable__control:checked~label.sk-toggleable__label {
+    /* fitted */
+    background-color: var(--sklearn-color-fitted-level-2);
+  }
+
+  #sk-container-id-2 div.sk-label label.sk-toggleable__label,
+  #sk-container-id-2 div.sk-label label {
+    /* The background is the default theme color */
+    color: var(--sklearn-color-text-on-default-background);
+  }
+
+  /* On hover, darken the color of the background */
+  #sk-container-id-2 div.sk-label:hover label.sk-toggleable__label {
+    color: var(--sklearn-color-text);
+    background-color: var(--sklearn-color-unfitted-level-2);
+  }
+
+  /* Label box, darken color on hover, fitted */
+  #sk-container-id-2 div.sk-label.fitted:hover label.sk-toggleable__label.fitted {
+    color: var(--sklearn-color-text);
+    background-color: var(--sklearn-color-fitted-level-2);
+  }
+
+  /* Estimator label */
+
+  #sk-container-id-2 div.sk-label label {
+    font-family: monospace;
+    font-weight: bold;
+    display: inline-block;
+    line-height: 1.2em;
+  }
+
+  #sk-container-id-2 div.sk-label-container {
+    text-align: center;
+  }
+
+  /* Estimator-specific */
+  #sk-container-id-2 div.sk-estimator {
+    font-family: monospace;
+    border: 1px dotted var(--sklearn-color-border-box);
+    border-radius: 0.25em;
+    box-sizing: border-box;
+    margin-bottom: 0.5em;
+    /* unfitted */
+    background-color: var(--sklearn-color-unfitted-level-0);
+  }
+
+  #sk-container-id-2 div.sk-estimator.fitted {
+    /* fitted */
+    background-color: var(--sklearn-color-fitted-level-0);
+  }
+
+  /* on hover */
+  #sk-container-id-2 div.sk-estimator:hover {
+    /* unfitted */
+    background-color: var(--sklearn-color-unfitted-level-2);
+  }
+
+  #sk-container-id-2 div.sk-estimator.fitted:hover {
+    /* fitted */
+    background-color: var(--sklearn-color-fitted-level-2);
+  }
+
+  /* Specification for estimator info (e.g. "i" and "?") */
+
+  /* Common style for "i" and "?" */
+
+  .sk-estimator-doc-link,
+  a:link.sk-estimator-doc-link,
+  a:visited.sk-estimator-doc-link {
+    float: right;
+    font-size: smaller;
+    line-height: 1em;
+    font-family: monospace;
+    background-color: var(--sklearn-color-background);
+    border-radius: 1em;
+    height: 1em;
+    width: 1em;
+    text-decoration: none !important;
+    margin-left: 1ex;
+    /* unfitted */
+    border: var(--sklearn-color-unfitted-level-1) 1pt solid;
+    color: var(--sklearn-color-unfitted-level-1);
+  }
+
+  .sk-estimator-doc-link.fitted,
+  a:link.sk-estimator-doc-link.fitted,
+  a:visited.sk-estimator-doc-link.fitted {
+    /* fitted */
+    border: var(--sklearn-color-fitted-level-1) 1pt solid;
+    color: var(--sklearn-color-fitted-level-1);
+  }
+
+  /* On hover */
+  div.sk-estimator:hover .sk-estimator-doc-link:hover,
+  .sk-estimator-doc-link:hover,
+  div.sk-label-container:hover .sk-estimator-doc-link:hover,
+  .sk-estimator-doc-link:hover {
+    /* unfitted */
+    background-color: var(--sklearn-color-unfitted-level-3);
+    color: var(--sklearn-color-background);
+    text-decoration: none;
+  }
+
+  div.sk-estimator.fitted:hover .sk-estimator-doc-link.fitted:hover,
+  .sk-estimator-doc-link.fitted:hover,
+  div.sk-label-container:hover .sk-estimator-doc-link.fitted:hover,
+  .sk-estimator-doc-link.fitted:hover {
+    /* fitted */
+    background-color: var(--sklearn-color-fitted-level-3);
+    color: var(--sklearn-color-background);
+    text-decoration: none;
+  }
+
+  /* Span, style for the box shown on hovering the info icon */
+  .sk-estimator-doc-link span {
+    display: none;
+    z-index: 9999;
+    position: relative;
+    font-weight: normal;
+    right: .2ex;
+    padding: .5ex;
+    margin: .5ex;
+    width: min-content;
+    min-width: 20ex;
+    max-width: 50ex;
+    color: var(--sklearn-color-text);
+    box-shadow: 2pt 2pt 4pt #999;
+    /* unfitted */
+    background: var(--sklearn-color-unfitted-level-0);
+    border: .5pt solid var(--sklearn-color-unfitted-level-3);
+  }
+
+  .sk-estimator-doc-link.fitted span {
+    /* fitted */
+    background: var(--sklearn-color-fitted-level-0);
+    border: var(--sklearn-color-fitted-level-3);
+  }
+
+  .sk-estimator-doc-link:hover span {
+    display: block;
+  }
+
+  /* "?"-specific style due to the `<a>` HTML tag */
+
+  #sk-container-id-2 a.estimator_doc_link {
+    float: right;
+    font-size: 1rem;
+    line-height: 1em;
+    font-family: monospace;
+    background-color: var(--sklearn-color-background);
+    border-radius: 1rem;
+    height: 1rem;
+    width: 1rem;
+    text-decoration: none;
+    /* unfitted */
+    color: var(--sklearn-color-unfitted-level-1);
+    border: var(--sklearn-color-unfitted-level-1) 1pt solid;
+  }
+
+  #sk-container-id-2 a.estimator_doc_link.fitted {
+    /* fitted */
+    border: var(--sklearn-color-fitted-level-1) 1pt solid;
+    color: var(--sklearn-color-fitted-level-1);
+  }
+
+  /* On hover */
+  #sk-container-id-2 a.estimator_doc_link:hover {
+    /* unfitted */
+    background-color: var(--sklearn-color-unfitted-level-3);
+    color: var(--sklearn-color-background);
+    text-decoration: none;
+  }
+
+  #sk-container-id-2 a.estimator_doc_link.fitted:hover {
+    /* fitted */
+    background-color: var(--sklearn-color-fitted-level-3);
+  }
+  </style>
+#+end_html
+
+<<sk-container-id-2>>
+
+#+begin_html
+  <pre>LGBMRegressor(learning_rate=0.07, min_data_in_leaf=4, num_leaves=60,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1)</pre>
+#+end_html
+
+In a Jupyter environment, please rerun this cell to show the HTML
+representation or trust the notebook. On GitHub, the HTML representation
+is unable to render, please try loading this page with nbviewer.org.
+
+ LGBMRegressoriFitted
+
+#+begin_html
+  <pre>LGBMRegressor(learning_rate=0.07, min_data_in_leaf=4, num_leaves=60,
+                objective=&#x27;regression&#x27;, seed=1, verbose=-1)</pre>
+#+end_html
+
+#+begin_src python
+# 予測の実施
+pred_gbm_reg = pd.DataFrame(
+    {'value':gbm_reg.predict(x_test)}, index=test_air.index)
+
+# 変換をもとに戻す
+pred_gbm_reg = detrend.inverse_transform(pred_gbm_reg)
+#+end_src
+
+#+begin_src python
+# 予測精度
+mae = mean_absolute_error(test_air, pred_gbm_reg)
+mase = mean_absolute_scaled_error(
+    test_air, pred_gbm_reg, y_train=train_air)
+
+print('MAE :', mae)
+print('MASE:', mase)
+#+end_src
+
+#+begin_example
+MAE : 18.040878836888798
+MASE: 0.887936538890111
+#+end_example
+
+#+begin_src python
+# 予測結果の可視化
+fig, ax = plot_series(train_air, test_air, 
+                      gbm_pred_air, pipe_gbm_pred, pred_gbm_reg,
+                      labels=['train', 'test', 'gbm', 'pipe_gbm', 'gbm_reg'], 
+                      markers=np.tile('', 5))
+fig.set_size_inches(8, 4)
+#+end_src
+
+#+caption: png
+[[file:6-1-LightGBM_files/6-1-LightGBM_58_0.png]]

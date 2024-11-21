@@ -1,0 +1,930 @@
+* 第2部　Pythonによる時系列分析の基本
+:PROPERTIES:
+:CUSTOM_ID: 第2部-pythonによる時系列分析の基本
+:END:
+** 第3章　Pythonによる統計分析の基本
+:PROPERTIES:
+:CUSTOM_ID: 第3章-pythonによる統計分析の基本
+:END:
+*** 分析の準備
+:PROPERTIES:
+:CUSTOM_ID: 分析の準備
+:END:
+#+begin_src python
+# 数値計算に使うライブラリ
+import numpy as np
+import pandas as pd
+from scipy import stats
+
+# 統計モデルを推定するライブラリ
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+import pmdarima as pm
+
+# グラフを描画するライブラリ
+from matplotlib import pyplot as plt
+import seaborn as sns
+sns.set()
+#+end_src
+
+#+begin_src python
+# 表示設定
+np.set_printoptions(linewidth=80)
+pd.set_option('display.width', 80)
+
+from matplotlib.pylab import rcParams
+rcParams['figure.figsize'] = 8, 4
+#+end_src
+
+*** 1変量データの分析
+:PROPERTIES:
+:CUSTOM_ID: 変量データの分析
+:END:
+**** データの読み込み
+:PROPERTIES:
+:CUSTOM_ID: データの読み込み
+:END:
+#+begin_src python
+# データの読み込み
+df1 = pd.read_csv('2-3-1-sample-data-1.csv')
+print(df1.head(3))
+#+end_src
+
+#+begin_example
+        x
+0  14.873
+1   8.165
+2   8.415
+#+end_example
+
+**** 統計量の計算
+:PROPERTIES:
+:CUSTOM_ID: 統計量の計算
+:END:
+#+begin_src python
+print(df1.describe())
+#+end_src
+
+#+begin_example
+               x
+count  30.000000
+mean    9.820100
+std     3.079053
+min     3.095000
+25%     7.774250
+50%     9.367500
+75%    12.384000
+max    15.234000
+#+end_example
+
+**** 可視化
+:PROPERTIES:
+:CUSTOM_ID: 可視化
+:END:
+#+begin_src python
+sns.histplot(df1['x'])
+#+end_src
+
+#+begin_example
+<Axes: xlabel='x', ylabel='Count'>
+#+end_example
+
+#+caption: png
+[[file:2-3-Python%E3%81%AB%E3%82%88%E3%82%8B%E7%B5%B1%E8%A8%88%E5%88%86%E6%9E%90%E3%81%AE%E5%9F%BA%E6%9C%AC_files/2-3-Python%E3%81%AB%E3%82%88%E3%82%8B%E7%B5%B1%E8%A8%88%E5%88%86%E6%9E%90%E3%81%AE%E5%9F%BA%E6%9C%AC_10_1.png]]
+
+**** 平均値の区間推定
+:PROPERTIES:
+:CUSTOM_ID: 平均値の区間推定
+:END:
+#+begin_src python
+# 平均値の区間推定
+dsw1 = sm.stats.DescrStatsW(df1['x'])
+print('標本平均', round(dsw1.mean, 3))
+print('標準偏差', round(dsw1.std, 3))
+print('標準誤差', round(dsw1.std_mean, 3))
+print('95％区間', np.round(dsw1.tconfint_mean(alpha=0.05), 3))
+#+end_src
+
+#+begin_example
+標本平均 9.82
+標準偏差 3.027
+標準誤差 0.562
+95％区間 [ 8.67 10.97]
+#+end_example
+
+**** 平均値に対するt検定
+:PROPERTIES:
+:CUSTOM_ID: 平均値に対するt検定
+:END:
+#+begin_src python
+# t値、p値、dfが出力される
+np.round(dsw1.ttest_mean(value=10, alternative='two-sided'), 3)
+#+end_src
+
+#+begin_example
+array([-0.32 ,  0.751, 29.   ])
+#+end_example
+
+#+begin_src python
+# 参考：片側検定
+print(np.round(dsw1.ttest_mean(value=10, alternative='larger'), 3))
+print(np.round(dsw1.ttest_mean(value=10, alternative='smaller'), 3))
+#+end_src
+
+#+begin_example
+[-0.32   0.624 29.   ]
+[-0.32   0.376 29.   ]
+#+end_example
+
+#+begin_src python
+# 3行プログラミング
+df1 = pd.read_csv('2-3-1-sample-data-1.csv')
+dsw1 = sm.stats.DescrStatsW(df1['x'])
+np.round(dsw1.ttest_mean(value=10, alternative='two-sided'), 3)
+#+end_src
+
+#+begin_example
+array([-0.32 ,  0.751, 29.   ])
+#+end_example
+
+*** 2変量データの分析（数量×カテゴリー）
+:PROPERTIES:
+:CUSTOM_ID: 変量データの分析数量カテゴリー
+:END:
+**** データの読み込み
+:PROPERTIES:
+:CUSTOM_ID: データの読み込み-1
+:END:
+#+begin_src python
+# データの読み込み
+df2 = pd.read_csv('2-3-2-sample-data-2.csv')
+print(df2.head(3))
+#+end_src
+
+#+begin_example
+       x category
+0  9.624        A
+1  7.388        A
+2  7.472        A
+#+end_example
+
+**** 統計量の計算
+:PROPERTIES:
+:CUSTOM_ID: 統計量の計算-1
+:END:
+#+begin_src python
+print(df2.groupby('category').describe())
+#+end_src
+
+#+begin_example
+             x                                                           
+         count      mean       std    min     25%    50%      75%     max
+category                                                                 
+A         15.0  7.923867  1.256656  5.698  7.3135  7.678   8.9995   9.745
+B         15.0  9.868733  2.328365  6.698  7.6575  9.631  11.6695  13.434
+#+end_example
+
+**** 可視化
+:PROPERTIES:
+:CUSTOM_ID: 可視化-1
+:END:
+#+begin_src python
+sns.histplot(x='x', hue='category', data=df2)
+#+end_src
+
+#+begin_example
+<Axes: xlabel='x', ylabel='Count'>
+#+end_example
+
+#+caption: png
+[[file:2-3-Python%E3%81%AB%E3%82%88%E3%82%8B%E7%B5%B1%E8%A8%88%E5%88%86%E6%9E%90%E3%81%AE%E5%9F%BA%E6%9C%AC_files/2-3-Python%E3%81%AB%E3%82%88%E3%82%8B%E7%B5%B1%E8%A8%88%E5%88%86%E6%9E%90%E3%81%AE%E5%9F%BA%E6%9C%AC_23_1.png]]
+
+#+begin_src python
+sns.violinplot(x='category', y='x', data=df2)
+#+end_src
+
+#+begin_example
+<Axes: xlabel='category', ylabel='x'>
+#+end_example
+
+#+caption: png
+[[file:2-3-Python%E3%81%AB%E3%82%88%E3%82%8B%E7%B5%B1%E8%A8%88%E5%88%86%E6%9E%90%E3%81%AE%E5%9F%BA%E6%9C%AC_files/2-3-Python%E3%81%AB%E3%82%88%E3%82%8B%E7%B5%B1%E8%A8%88%E5%88%86%E6%9E%90%E3%81%AE%E5%9F%BA%E6%9C%AC_24_1.png]]
+
+**** 平均値の差の区間推定
+:PROPERTIES:
+:CUSTOM_ID: 平均値の差の区間推定
+:END:
+#+begin_src python
+print(df2.query('category == "A"').head(3))
+#+end_src
+
+#+begin_example
+       x category
+0  9.624        A
+1  7.388        A
+2  7.472        A
+#+end_example
+
+#+begin_src python
+# データの分割
+category_a = df2.query('category == "A"')['x']
+category_b = df2.query('category == "B"')['x']
+#+end_src
+
+#+begin_src python
+#平均値の差の信頼区間
+dsw2_a = sm.stats.DescrStatsW(category_a)
+dsw2_b = sm.stats.DescrStatsW(category_b)
+
+cm = sm.stats.CompareMeans(dsw2_a, dsw2_b)
+np.round(cm.tconfint_diff(alpha=0.05, usevar='unequal'), 3)
+#+end_src
+
+#+begin_example
+array([-3.363, -0.526])
+#+end_example
+
+**** 平均の差に対するt検定
+:PROPERTIES:
+:CUSTOM_ID: 平均の差に対するt検定
+:END:
+#+begin_src python
+# t値、p値、dfが出力される
+np.round(cm.ttest_ind(usevar='unequal', alternative='two-sided'), 3)
+#+end_src
+
+#+begin_example
+array([-2.8470e+00,  1.0000e-02,  2.1518e+01])
+#+end_example
+
+#+begin_src python
+# t値、p値、dfが出力される
+np.round(sm.stats.ttest_ind(
+    category_a, category_b, 
+    usevar='unequal', alternative='two-sided'), 3)
+#+end_src
+
+#+begin_example
+array([-2.8470e+00,  1.0000e-02,  2.1518e+01])
+#+end_example
+
+*** 2変量データの分析（数量×数量）
+:PROPERTIES:
+:CUSTOM_ID: 変量データの分析数量数量
+:END:
+**** データの読み込み
+:PROPERTIES:
+:CUSTOM_ID: データの読み込み-2
+:END:
+#+begin_src python
+# データの読み込み
+df3 = pd.read_csv('2-3-3-sample-data-3.csv')
+print(df3.head(3))
+#+end_src
+
+#+begin_example
+        x       y
+0  46.243  36.461
+1  23.882  20.932
+2  24.718  19.277
+#+end_example
+
+**** 統計量の計算
+:PROPERTIES:
+:CUSTOM_ID: 統計量の計算-2
+:END:
+#+begin_src python
+print(df3.describe())
+#+end_src
+
+#+begin_example
+               x          y
+count  30.000000  30.000000
+mean   29.400567  29.133033
+std    10.263615   9.645102
+min     6.985000   5.418000
+25%    22.581750  23.143500
+50%    27.891000  30.262000
+75%    37.947500  36.180750
+max    47.448000  44.831000
+#+end_example
+
+**** 可視化
+:PROPERTIES:
+:CUSTOM_ID: 可視化-2
+:END:
+#+begin_src python
+sns.scatterplot(x='x', y='y', data=df3)
+#+end_src
+
+#+begin_example
+<Axes: xlabel='x', ylabel='y'>
+#+end_example
+
+#+caption: png
+[[file:2-3-Python%E3%81%AB%E3%82%88%E3%82%8B%E7%B5%B1%E8%A8%88%E5%88%86%E6%9E%90%E3%81%AE%E5%9F%BA%E6%9C%AC_files/2-3-Python%E3%81%AB%E3%82%88%E3%82%8B%E7%B5%B1%E8%A8%88%E5%88%86%E6%9E%90%E3%81%AE%E5%9F%BA%E6%9C%AC_38_1.png]]
+
+**** 回帰分析
+:PROPERTIES:
+:CUSTOM_ID: 回帰分析
+:END:
+#+begin_src python
+# モデルの構築
+lm_model = smf.ols(formula='y ~ x', data=df3).fit()
+
+# 結果の確認
+print(lm_model.summary())
+#+end_src
+
+#+begin_example
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:                      y   R-squared:                       0.526
+Model:                            OLS   Adj. R-squared:                  0.509
+Method:                 Least Squares   F-statistic:                     31.02
+Date:                Wed, 11 Sep 2024   Prob (F-statistic):           5.86e-06
+Time:                        16:39:00   Log-Likelihood:                -98.868
+No. Observations:                  30   AIC:                             201.7
+Df Residuals:                      28   BIC:                             204.5
+Df Model:                           1                                         
+Covariance Type:            nonrobust                                         
+==============================================================================
+                 coef    std err          t      P>|t|      [0.025      0.975]
+------------------------------------------------------------------------------
+Intercept      9.1027      3.802      2.394      0.024       1.314      16.891
+x              0.6813      0.122      5.570      0.000       0.431       0.932
+==============================================================================
+Omnibus:                        2.118   Durbin-Watson:                   1.351
+Prob(Omnibus):                  0.347   Jarque-Bera (JB):                1.795
+Skew:                           0.579   Prob(JB):                        0.408
+Kurtosis:                       2.690   Cond. No.                         95.8
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
+#+end_example
+
+**** 分散分析
+:PROPERTIES:
+:CUSTOM_ID: 分散分析
+:END:
+#+begin_src python
+print(sm.stats.anova_lm(lm_model))
+#+end_src
+
+#+begin_example
+            df       sum_sq      mean_sq          F    PR(>F)
+x          1.0  1417.965482  1417.965482  31.021716  0.000006
+Residual  28.0  1279.846475    45.708803        NaN       NaN
+#+end_example
+
+#+begin_src python
+# まとめ
+df3 = pd.read_csv('2-3-3-sample-data-3.csv')
+lm_model = smf.ols(formula='y ~ x', data=df3).fit()
+print(lm_model.summary())
+print(sm.stats.anova_lm(lm_model))
+#+end_src
+
+#+begin_example
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:                      y   R-squared:                       0.526
+Model:                            OLS   Adj. R-squared:                  0.509
+Method:                 Least Squares   F-statistic:                     31.02
+Date:                Wed, 11 Sep 2024   Prob (F-statistic):           5.86e-06
+Time:                        16:39:00   Log-Likelihood:                -98.868
+No. Observations:                  30   AIC:                             201.7
+Df Residuals:                      28   BIC:                             204.5
+Df Model:                           1                                         
+Covariance Type:            nonrobust                                         
+==============================================================================
+                 coef    std err          t      P>|t|      [0.025      0.975]
+------------------------------------------------------------------------------
+Intercept      9.1027      3.802      2.394      0.024       1.314      16.891
+x              0.6813      0.122      5.570      0.000       0.431       0.932
+==============================================================================
+Omnibus:                        2.118   Durbin-Watson:                   1.351
+Prob(Omnibus):                  0.347   Jarque-Bera (JB):                1.795
+Skew:                           0.579   Prob(JB):                        0.408
+Kurtosis:                       2.690   Cond. No.                         95.8
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
+            df       sum_sq      mean_sq          F    PR(>F)
+x          1.0  1417.965482  1417.965482  31.021716  0.000006
+Residual  28.0  1279.846475    45.708803        NaN       NaN
+#+end_example
+
+*** サンプルデータの利用
+:PROPERTIES:
+:CUSTOM_ID: サンプルデータの利用
+:END:
+https://www.statsmodels.org/dev/datasets/index.html
+
+**** load_pandas関数の利用
+:PROPERTIES:
+:CUSTOM_ID: load_pandas関数の利用
+:END:
+#+begin_src python
+nile = sm.datasets.nile.load_pandas().data
+print(nile.head(3))
+#+end_src
+
+#+begin_example
+     year  volume
+0  1871.0  1120.0
+1  1872.0  1160.0
+2  1873.0   963.0
+#+end_example
+
+#+begin_src python
+# 参考：別のデータの読み込み
+sm.datasets.co2.load_pandas().data.head(3)
+#+end_src
+
+#+begin_html
+  <style scoped>
+      .dataframe tbody tr th:only-of-type {
+          vertical-align: middle;
+      }
+
+      .dataframe tbody tr th {
+          vertical-align: top;
+      }
+
+      .dataframe thead th {
+          text-align: right;
+      }
+  </style>
+#+end_html
+
+#+begin_html
+  <table border="1" class="dataframe">
+#+end_html
+
+#+begin_html
+  <thead>
+#+end_html
+
+#+begin_html
+  <tr style="text-align: right;">
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+co2
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  </thead>
+#+end_html
+
+#+begin_html
+  <tbody>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+1958-03-29
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+316.1
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+1958-04-05
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+317.3
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+1958-04-12
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+317.6
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  </tbody>
+#+end_html
+
+#+begin_html
+  </table>
+#+end_html
+
+#+begin_src python
+print(sm.datasets.co2.DESCRLONG)
+#+end_src
+
+#+begin_example
+Atmospheric CO2 from Continuous Air Samples at Mauna Loa Observatory, Hawaii, U.S.A.
+
+Period of Record: March 1958 - December 2001
+
+Methods: An Applied Physics Corporation (APC) nondispersive infrared gas analyzer was used to obtain atmospheric CO2 concentrations, based on continuous data (four measurements per hour) from atop intake lines on several towers. Steady data periods of not less than six hours per day are required; if no such six-hour periods are available on any given day, then no data are used that day. Weekly averages were calculated for most weeks throughout the approximately 44 years of record. The continuous data for year 2000 is compared with flask data from the same site in the graphics section.
+#+end_example
+
+#+begin_src python
+print(sm.datasets.nile.COPYRIGHT)
+print('---------------')
+print(sm.datasets.nile.DESCRLONG)
+print('---------------')
+print(sm.datasets.nile.NOTE)
+#+end_src
+
+#+begin_example
+This is public domain.
+---------------
+This dataset contains measurements on the annual flow of
+the Nile as measured at Ashwan for 100 years from 1871-1970. There is an apparent changepoint near 1898.
+---------------
+::
+
+    Number of observations: 100
+    Number of variables: 2
+    Variable name definitions:
+
+        year - the year of the observations
+        volumne - the discharge at Aswan in 10^8, m^3
+#+end_example
+
+**** get_rdataset関数の利用
+:PROPERTIES:
+:CUSTOM_ID: get_rdataset関数の利用
+:END:
+#+begin_src python
+sm.datasets.get_rdataset("Nile").data.head(3)
+#+end_src
+
+#+begin_html
+  <style scoped>
+      .dataframe tbody tr th:only-of-type {
+          vertical-align: middle;
+      }
+
+      .dataframe tbody tr th {
+          vertical-align: top;
+      }
+
+      .dataframe thead th {
+          text-align: right;
+      }
+  </style>
+#+end_html
+
+#+begin_html
+  <table border="1" class="dataframe">
+#+end_html
+
+#+begin_html
+  <thead>
+#+end_html
+
+#+begin_html
+  <tr style="text-align: right;">
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+time
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+value
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  </thead>
+#+end_html
+
+#+begin_html
+  <tbody>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+0
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+1871
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+1120
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+1
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+1872
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+1160
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+2
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+1873
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+963
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  </tbody>
+#+end_html
+
+#+begin_html
+  </table>
+#+end_html
+
+#+begin_src python
+AirPassengers = sm.datasets.get_rdataset("AirPassengers")
+print(AirPassengers.data.head(3))
+#+end_src
+
+#+begin_example
+          time  value
+0  1949.000000    112
+1  1949.083333    118
+2  1949.166667    132
+#+end_example
+
+#+begin_src python
+print(AirPassengers.__doc__)
+#+end_src
+
+#+begin_example
+.. container::
+
+   .. container::
+
+      ============= ===============
+      AirPassengers R Documentation
+      ============= ===============
+
+      .. rubric:: Monthly Airline Passenger Numbers 1949-1960
+         :name: monthly-airline-passenger-numbers-1949-1960
+
+      .. rubric:: Description
+         :name: description
+
+      The classic Box & Jenkins airline data. Monthly totals of
+      international airline passengers, 1949 to 1960.
+
+      .. rubric:: Usage
+         :name: usage
+
+      .. code:: R
+
+         AirPassengers
+
+      .. rubric:: Format
+         :name: format
+
+      A monthly time series, in thousands.
+
+      .. rubric:: Source
+         :name: source
+
+      Box, G. E. P., Jenkins, G. M. and Reinsel, G. C. (1976) *Time
+      Series Analysis, Forecasting and Control.* Third Edition.
+      Holden-Day. Series G.
+
+      .. rubric:: Examples
+         :name: examples
+
+      .. code:: R
+
+         ## The classic 'airline model', by full ML
+         (fit <- arima(log10(AirPassengers), c(0, 1, 1),
+                       seasonal = list(order = c(0, 1, 1), period = 12)))
+         update(fit, method = "CSS")
+         update(fit, x = window(log10(AirPassengers), start = 1954))
+         pred <- predict(fit, n.ahead = 24)
+         tl <- pred$pred - 1.96 * pred$se
+         tu <- pred$pred + 1.96 * pred$se
+         ts.plot(AirPassengers, 10^tl, 10^tu, log = "y", lty = c(1, 2, 2))
+
+         ## full ML fit is the same if the series is reversed, CSS fit is not
+         ap0 <- rev(log10(AirPassengers))
+         attributes(ap0) <- attributes(AirPassengers)
+         arima(ap0, c(0, 1, 1), seasonal = list(order = c(0, 1, 1), period = 12))
+         arima(ap0, c(0, 1, 1), seasonal = list(order = c(0, 1, 1), period = 12),
+               method = "CSS")
+
+         ## Structural Time Series
+         ap <- log10(AirPassengers) - 2
+         (fit <- StructTS(ap, type = "BSM"))
+         par(mfrow = c(1, 2))
+         plot(cbind(ap, fitted(fit)), plot.type = "single")
+         plot(cbind(ap, tsSmooth(fit)), plot.type = "single")
+#+end_example
+
+**** pmdarimaライブラリのデータ
+:PROPERTIES:
+:CUSTOM_ID: pmdarimaライブラリのデータ
+:END:
+https://alkaline-ml.com/pmdarima/modules/datasets.html
+
+#+begin_src python
+taylor = pm.datasets.load_taylor(as_series=True)
+taylor.head(3)
+#+end_src
+
+#+begin_example
+0    22262.0
+1    21756.0
+2    22247.0
+dtype: float64
+#+end_example

@@ -1,0 +1,77 @@
+* 第5部　線形ガウス状態空間モデル
+:PROPERTIES:
+:CUSTOM_ID: 第5部-線形ガウス状態空間モデル
+:END:
+** 第2章　ローカルレベルモデル
+:PROPERTIES:
+:CUSTOM_ID: 第2章-ローカルレベルモデル
+:END:
+*** 分析の準備
+:PROPERTIES:
+:CUSTOM_ID: 分析の準備
+:END:
+#+begin_src python
+# 数値計算に使うライブラリ
+import numpy as np
+import pandas as pd
+from scipy import stats
+
+# グラフを描画するライブラリ
+from matplotlib import pylab as plt
+import seaborn as sns
+sns.set()
+#+end_src
+
+#+begin_src python
+# 表示設定
+np.set_printoptions(linewidth=60)
+pd.set_option('display.width', 80)
+
+from matplotlib.pylab import rcParams
+rcParams['figure.figsize'] = 8, 4
+#+end_src
+
+*** ローカルレベルモデルのシミュレーション
+:PROPERTIES:
+:CUSTOM_ID: ローカルレベルモデルのシミュレーション
+:END:
+#+begin_src python
+# 乱数の種
+np.random.seed(1)
+
+# 正規分布に従う乱数の累積和を作成し、ランダムウォーク系列を作る
+sim_size = 100
+mu = np.cumsum(stats.norm.rvs(loc=0, scale=1, size=sim_size).round(1)) + 30
+#+end_src
+
+#+begin_src python
+# 観測値の作成
+y = mu + stats.norm.rvs(loc=0, scale=5, size=sim_size).round(1)
+#+end_src
+
+#+begin_src python
+# DataFrameにまとめる
+local_level_df = pd.DataFrame({'mu': mu, 'y':y})
+
+# 確認
+print(local_level_df.head(3))
+#+end_src
+
+#+begin_example
+     mu     y
+0  31.6  29.4
+1  31.0  37.1
+2  30.5  32.5
+#+end_example
+
+#+begin_src python
+# 可視化
+local_level_df.plot()
+#+end_src
+
+#+begin_example
+<Axes: >
+#+end_example
+
+#+caption: png
+[[file:5-2-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB_files/5-2-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB_8_1.png]]

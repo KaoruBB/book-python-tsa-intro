@@ -1,0 +1,1614 @@
+* 第2部　Pythonによる時系列分析の基本
+:PROPERTIES:
+:CUSTOM_ID: 第2部-pythonによる時系列分析の基本
+:END:
+** 第4章　pandasによる日付処理の基本
+:PROPERTIES:
+:CUSTOM_ID: 第4章-pandasによる日付処理の基本
+:END:
+*** 分析の準備
+:PROPERTIES:
+:CUSTOM_ID: 分析の準備
+:END:
+#+begin_src python
+# 数値計算に使うライブラリ
+import numpy as np
+import pandas as pd
+#+end_src
+
+#+begin_src python
+# 表示設定
+np.set_printoptions(linewidth=80)
+pd.set_option('display.width', 80)
+
+from matplotlib.pylab import rcParams
+rcParams['figure.figsize'] = 8, 4
+#+end_src
+
+*** pandasを用いたTimestampの作成
+:PROPERTIES:
+:CUSTOM_ID: pandasを用いたtimestampの作成
+:END:
+**** Timestampの作成
+:PROPERTIES:
+:CUSTOM_ID: timestampの作成
+:END:
+#+begin_src python
+type('2020-01-01')
+#+end_src
+
+#+begin_example
+str
+#+end_example
+
+#+begin_src python
+my_time = pd.Timestamp('2020-05-11')
+my_time
+#+end_src
+
+#+begin_example
+Timestamp('2020-05-11 00:00:00')
+#+end_example
+
+#+begin_src python
+type(my_time)
+#+end_src
+
+#+begin_example
+pandas._libs.tslibs.timestamps.Timestamp
+#+end_example
+
+**** pd.to_datetime関数の利用
+:PROPERTIES:
+:CUSTOM_ID: pd.to_datetime関数の利用
+:END:
+#+begin_src python
+my_time2 = pd.to_datetime('2020-05-11')
+my_time2
+#+end_src
+
+#+begin_example
+Timestamp('2020-05-11 00:00:00')
+#+end_example
+
+#+begin_src python
+pd.to_datetime('2020年6月8日', format='%Y年%m月%d日')
+#+end_src
+
+#+begin_example
+Timestamp('2020-06-08 00:00:00')
+#+end_example
+
+#+begin_src python
+pd.to_datetime('2020 Feb 7', format='%Y %b %d')
+#+end_src
+
+#+begin_example
+Timestamp('2020-02-07 00:00:00')
+#+end_example
+
+#+begin_src python
+pd.to_datetime('時間は14時28分14秒だよ。ちなみに2020年の6月8日です。',
+               format='時間は%H時%M分%S秒だよ。ちなみに%Y年の%m月%d日です。')
+#+end_src
+
+#+begin_example
+Timestamp('2020-06-08 14:28:14')
+#+end_example
+
+**** 現在時刻の取得
+:PROPERTIES:
+:CUSTOM_ID: 現在時刻の取得
+:END:
+#+begin_src python
+pd.Timestamp.now()
+#+end_src
+
+#+begin_example
+Timestamp('2024-09-11 16:28:02.648078')
+#+end_example
+
+*** Timestampからの日付情報の取得
+:PROPERTIES:
+:CUSTOM_ID: timestampからの日付情報の取得
+:END:
+#+begin_src python
+my_time3 = pd.to_datetime('2020-09-08 14:11:04')
+my_time3
+#+end_src
+
+#+begin_example
+Timestamp('2020-09-08 14:11:04')
+#+end_example
+
+#+begin_src python
+print('年', my_time3.year)
+print('月', my_time3.month)
+print('日', my_time3.day)
+print('時', my_time3.hour)
+print('分', my_time3.minute)
+print('秒', my_time3.second)
+print('1年の何日目か', my_time3.dayofyear)
+print('1年の何週目か', my_time3.weekofyear)
+print('曜日(月曜が0)', my_time3.dayofweek)
+print('四半期　　　 ', my_time3.quarter)
+#+end_src
+
+#+begin_example
+年 2020
+月 9
+日 8
+時 14
+分 11
+秒 4
+1年の何日目か 252
+1年の何週目か 37
+曜日(月曜が0) 1
+四半期　　　  3
+#+end_example
+
+#+begin_src python
+print('2020年2月', pd.to_datetime('2020-02').daysinmonth)
+print('2021年2月', pd.to_datetime('2021-02').daysinmonth)
+#+end_src
+
+#+begin_example
+2020年2月 29
+2021年2月 28
+#+end_example
+
+*** pandasを用いたDatetimeIndexの作成
+:PROPERTIES:
+:CUSTOM_ID: pandasを用いたdatetimeindexの作成
+:END:
+**** pd.date_range関数の利用
+:PROPERTIES:
+:CUSTOM_ID: pd.date_range関数の利用
+:END:
+#+begin_src python
+time_range = pd.date_range(start='2020-01-01', end='2020-03-01', freq='MS')
+time_range
+#+end_src
+
+#+begin_example
+DatetimeIndex(['2020-01-01', '2020-02-01', '2020-03-01'], dtype='datetime64[ns]', freq='MS')
+#+end_example
+
+#+begin_src python
+type(time_range)
+#+end_src
+
+#+begin_example
+pandas.core.indexes.datetimes.DatetimeIndex
+#+end_example
+
+#+begin_src python
+# endを含まない
+pd.date_range(start='2020-01-01', end='2020-03-01', freq='MS', inclusive='left')
+#+end_src
+
+#+begin_example
+DatetimeIndex(['2020-01-01', '2020-02-01'], dtype='datetime64[ns]', freq='MS')
+#+end_example
+
+#+begin_src python
+# startを含まない
+pd.date_range(start='2020-01-01', end='2020-03-01', freq='MS', inclusive='right')
+#+end_src
+
+#+begin_example
+DatetimeIndex(['2020-02-01', '2020-03-01'], dtype='datetime64[ns]', freq='MS')
+#+end_example
+
+#+begin_src python
+# start,endを含まない
+pd.date_range(start='2020-01-01', end='2020-03-01', freq='MS', inclusive='neither')
+#+end_src
+
+#+begin_example
+DatetimeIndex(['2020-02-01'], dtype='datetime64[ns]', freq='MS')
+#+end_example
+
+#+begin_src python
+# periodsの指定
+pd.date_range(start='2020-01-01', periods=3, freq='MS')
+#+end_src
+
+#+begin_example
+DatetimeIndex(['2020-01-01', '2020-02-01', '2020-03-01'], dtype='datetime64[ns]', freq='MS')
+#+end_example
+
+**** freqの指定
+:PROPERTIES:
+:CUSTOM_ID: freqの指定
+:END:
+#+begin_src python
+# 月の終わり
+pd.date_range(start='2020-01-01', periods=3, freq='ME')
+#+end_src
+
+#+begin_example
+DatetimeIndex(['2020-01-31', '2020-02-29', '2020-03-31'], dtype='datetime64[ns]', freq='ME')
+#+end_example
+
+#+begin_src python
+# 1日単位
+pd.date_range(start='2020-01-01', periods=3, freq='D')
+#+end_src
+
+#+begin_example
+DatetimeIndex(['2020-01-01', '2020-01-02', '2020-01-03'], dtype='datetime64[ns]', freq='D')
+#+end_example
+
+参考 時間単位の一覧
+https://pandas.pydata.org/docs/user_guide/timeseries.html#timeseries-offset-aliases
+
+#+begin_src python
+# さまざまな時間単位(日より大きい単位)
+print(pd.date_range(start='2020-01-01', periods=3, freq='D'))  # Day
+print(pd.date_range(start='2020-01-01', periods=3, freq='W'))  # Week
+
+print(pd.date_range(start='2020-01-01', periods=3, freq='SME')) # Semi-Month
+print(pd.date_range(start='2020-01-01', periods=3, freq='SMS')) # Semi-Month-Start
+
+print(pd.date_range(start='2020-01-01', periods=3, freq='ME'))  # Month
+print(pd.date_range(start='2020-01-01', periods=3, freq='MS'))  # Month-Start
+
+print(pd.date_range(start='2020-01-01', periods=3, freq='QE'))  # Quarter
+print(pd.date_range(start='2020-01-01', periods=3, freq='QS'))  # Quater-start
+
+print(pd.date_range(start='2020-01-01', periods=3, freq='YE'))  # Year
+print(pd.date_range(start='2020-01-01', periods=3, freq='YS'))  # Year
+#+end_src
+
+#+begin_example
+DatetimeIndex(['2020-01-01', '2020-01-02', '2020-01-03'], dtype='datetime64[ns]', freq='D')
+DatetimeIndex(['2020-01-05', '2020-01-12', '2020-01-19'], dtype='datetime64[ns]', freq='W-SUN')
+DatetimeIndex(['2020-01-15', '2020-01-31', '2020-02-15'], dtype='datetime64[ns]', freq='SME-15')
+DatetimeIndex(['2020-01-01', '2020-01-15', '2020-02-01'], dtype='datetime64[ns]', freq='SMS-15')
+DatetimeIndex(['2020-01-31', '2020-02-29', '2020-03-31'], dtype='datetime64[ns]', freq='ME')
+DatetimeIndex(['2020-01-01', '2020-02-01', '2020-03-01'], dtype='datetime64[ns]', freq='MS')
+DatetimeIndex(['2020-03-31', '2020-06-30', '2020-09-30'], dtype='datetime64[ns]', freq='QE-DEC')
+DatetimeIndex(['2020-01-01', '2020-04-01', '2020-07-01'], dtype='datetime64[ns]', freq='QS-JAN')
+DatetimeIndex(['2020-12-31', '2021-12-31', '2022-12-31'], dtype='datetime64[ns]', freq='YE-DEC')
+DatetimeIndex(['2020-01-01', '2021-01-01', '2022-01-01'], dtype='datetime64[ns]', freq='YS-JAN')
+#+end_example
+
+#+begin_src python
+# さまざまな時間単位(1日未満の単位)
+print(pd.date_range(start='2020-01-01', periods=3, freq='h'))    # Hour
+print(pd.date_range(start='2020-01-01', periods=3, freq='min'))  # Minute
+print(pd.date_range(start='2020-01-01', periods=3, freq='s'))    # Second
+
+# 以下、本文にない参考
+print(pd.date_range(start='2020-01-01', periods=3, freq='ms'))   # milli-second
+print(pd.date_range(start='2020-01-01', periods=3, freq='us'))   # micro-seconds
+print(pd.date_range(start='2020-01-01', periods=3, freq='ns'))   # nanoseconds
+#+end_src
+
+#+begin_example
+DatetimeIndex(['2020-01-01 00:00:00', '2020-01-01 01:00:00',
+               '2020-01-01 02:00:00'],
+              dtype='datetime64[ns]', freq='h')
+DatetimeIndex(['2020-01-01 00:00:00', '2020-01-01 00:01:00',
+               '2020-01-01 00:02:00'],
+              dtype='datetime64[ns]', freq='min')
+DatetimeIndex(['2020-01-01 00:00:00', '2020-01-01 00:00:01',
+               '2020-01-01 00:00:02'],
+              dtype='datetime64[ns]', freq='s')
+DatetimeIndex([       '2020-01-01 00:00:00', '2020-01-01 00:00:00.001000',
+               '2020-01-01 00:00:00.002000'],
+              dtype='datetime64[ns]', freq='ms')
+DatetimeIndex([       '2020-01-01 00:00:00', '2020-01-01 00:00:00.000001',
+               '2020-01-01 00:00:00.000002'],
+              dtype='datetime64[ns]', freq='us')
+DatetimeIndex([          '2020-01-01 00:00:00',
+               '2020-01-01 00:00:00.000000001',
+               '2020-01-01 00:00:00.000000002'],
+              dtype='datetime64[ns]', freq='ns')
+#+end_example
+
+**** freqの詳細な指定
+:PROPERTIES:
+:CUSTOM_ID: freqの詳細な指定
+:END:
+#+begin_src python
+# freqの詳細な設定
+print(pd.date_range(start='2020-01-01', periods=4, freq='W-SUN'))  # Week-Sunday
+print(pd.date_range(start='2020-01-01', periods=4, freq='W-MON'))  # Week-Monday
+#+end_src
+
+#+begin_example
+DatetimeIndex(['2020-01-05', '2020-01-12', '2020-01-19', '2020-01-26'], dtype='datetime64[ns]', freq='W-SUN')
+DatetimeIndex(['2020-01-06', '2020-01-13', '2020-01-20', '2020-01-27'], dtype='datetime64[ns]', freq='W-MON')
+#+end_example
+
+#+begin_src python
+# 15分単位
+print(pd.date_range(start='2020-01-01', periods=6, freq='15min'))  # 15 Minute
+#+end_src
+
+#+begin_example
+DatetimeIndex(['2020-01-01 00:00:00', '2020-01-01 00:15:00',
+               '2020-01-01 00:30:00', '2020-01-01 00:45:00',
+               '2020-01-01 01:00:00', '2020-01-01 01:15:00'],
+              dtype='datetime64[ns]', freq='15min')
+#+end_example
+
+*** SeriesやDataFrameへのindexの付与
+:PROPERTIES:
+:CUSTOM_ID: seriesやdataframeへのindexの付与
+:END:
+**** TimestampのindexをもつSeries
+:PROPERTIES:
+:CUSTOM_ID: timestampのindexをもつseries
+:END:
+#+begin_src python
+my_ts = pd.Series([1,2,3,4,5])
+my_ts
+#+end_src
+
+#+begin_example
+0    1
+1    2
+2    3
+3    4
+4    5
+dtype: int64
+#+end_example
+
+#+begin_src python
+my_ts.index = pd.date_range(start='2020-01-01', periods=5, freq='D')
+my_ts
+#+end_src
+
+#+begin_example
+2020-01-01    1
+2020-01-02    2
+2020-01-03    3
+2020-01-04    4
+2020-01-05    5
+Freq: D, dtype: int64
+#+end_example
+
+**** TimestampのindexをもつDataFrame
+:PROPERTIES:
+:CUSTOM_ID: timestampのindexをもつdataframe
+:END:
+#+begin_src python
+my_mts = pd.DataFrame({
+    'product_a':[1,4,7,4,8],
+    'product_b':[4,9,3,1,0]
+})
+my_mts.index = pd.date_range(start='2020-01-01', periods=5, freq='MS')
+print(my_mts)
+#+end_src
+
+#+begin_example
+            product_a  product_b
+2020-01-01          1          4
+2020-02-01          4          9
+2020-03-01          7          3
+2020-04-01          4          1
+2020-05-01          8          0
+#+end_example
+
+**** indexの修正
+:PROPERTIES:
+:CUSTOM_ID: indexの修正
+:END:
+#+begin_src python
+my_mts.index = pd.date_range(start='2020-01-01', periods=5, freq='W')
+print(my_mts)
+#+end_src
+
+#+begin_example
+            product_a  product_b
+2020-01-05          1          4
+2020-01-12          4          9
+2020-01-19          7          3
+2020-01-26          4          1
+2020-02-02          8          0
+#+end_example
+
+*** 時系列データの読み込み
+:PROPERTIES:
+:CUSTOM_ID: 時系列データの読み込み
+:END:
+**** 時系列データの読み込みの基本
+:PROPERTIES:
+:CUSTOM_ID: 時系列データの読み込みの基本
+:END:
+#+begin_src python
+# データの読み込み
+ts_month = pd.read_csv(
+    '2-4-1-time-series-month.csv',  # ファイル名
+    index_col='time',               # インデックスとして扱う列名
+    parse_dates=True,               # インデックスを「時間軸」として扱う
+    dtype='float'                   # データの型(浮動小数点)
+)
+
+ts_month.index.freq = 'MS'
+
+# 結果の確認
+print(ts_month)
+#+end_src
+
+#+begin_example
+            sales
+time             
+2000-01-01   10.0
+2000-02-01    5.0
+2000-03-01    8.0
+2000-04-01   14.0
+2000-05-01    9.0
+#+end_example
+
+#+begin_src python
+# 日単位データの読み込み
+ts_day = pd.read_csv(
+    '2-4-2-time-series-day.csv', 
+    index_col='time',
+    parse_dates=True,
+    dtype='float'
+)
+
+ts_day.index.freq = 'D'
+
+# 結果の確認
+print(ts_day.head(3))
+print(ts_day.tail(3))
+#+end_src
+
+#+begin_example
+            value
+time             
+1990-01-01    1.0
+1990-01-02    2.0
+1990-01-03    3.0
+             value
+time              
+1999-12-29  3650.0
+1999-12-30  3651.0
+1999-12-31  3652.0
+#+end_example
+
+#+begin_src python
+ts_month.index
+#+end_src
+
+#+begin_example
+DatetimeIndex(['2000-01-01', '2000-02-01', '2000-03-01', '2000-04-01',
+               '2000-05-01'],
+              dtype='datetime64[ns]', name='time', freq='MS')
+#+end_example
+
+#+begin_src python
+# 参考：indexの型
+type(ts_month.index)
+#+end_src
+
+#+begin_example
+pandas.core.indexes.datetimes.DatetimeIndex
+#+end_example
+
+**** 時間情報がわかれたデータの読み込み(日単位)
+:PROPERTIES:
+:CUSTOM_ID: 時間情報がわかれたデータの読み込み日単位
+:END:
+#+begin_src python
+# 時間情報がわかれたデータの読み込み
+separate_day = pd.read_csv('2-4-3-separate-time-day.csv')
+
+# 結果の確認
+print(separate_day.head(3))
+#+end_src
+
+#+begin_example
+   year  month  day  value
+0  1990      1    1      1
+1  1990      1    2      2
+2  1990      1    3      3
+#+end_example
+
+#+begin_src python
+# インデックスの作成
+separate_day.index = pd.to_datetime(separate_day[['year', 'month', 'day']])
+separate_day.index.freq = 'D'
+
+# 結果の確認
+print(separate_day.head(3))
+#+end_src
+
+#+begin_example
+            year  month  day  value
+1990-01-01  1990      1    1      1
+1990-01-02  1990      1    2      2
+1990-01-03  1990      1    3      3
+#+end_example
+
+#+begin_src python
+# 不要な列の削除
+separate_day = separate_day.drop(['year', 'month', 'day'], axis=1)
+
+# 結果の確認
+print(separate_day.head(3))
+#+end_src
+
+#+begin_example
+            value
+1990-01-01      1
+1990-01-02      2
+1990-01-03      3
+#+end_example
+
+**** 時間情報がわかれたデータの読み込み(月単位)
+:PROPERTIES:
+:CUSTOM_ID: 時間情報がわかれたデータの読み込み月単位
+:END:
+#+begin_src python
+# 時間情報がわかれたデータの読み込み
+separate_month = pd.read_csv('2-4-4-separate-time-month.csv')
+
+# 結果の確認
+print(separate_month.head(3))
+#+end_src
+
+#+begin_example
+   year  month  value
+0  1990      1      1
+1  1990      2      2
+2  1990      3      3
+#+end_example
+
+#+begin_src python
+# 日付情報の結合
+# インデックスの作成
+separate_month.index = pd.to_datetime(
+    {'year':separate_month['year'], 
+     'month':separate_month['month'], 
+     'day':np.tile(1, len(separate_month))}
+)
+separate_month.index.freq = 'MS'
+# 不要な列の削除
+separate_month = separate_month.drop(['year', 'month'], axis=1)
+
+# 結果の確認
+print(separate_month.head(3))
+#+end_src
+
+#+begin_example
+            value
+1990-01-01      1
+1990-02-01      2
+1990-03-01      3
+#+end_example
+
+*** 日時を指定したデータの抽出
+:PROPERTIES:
+:CUSTOM_ID: 日時を指定したデータの抽出
+:END:
+**** データ抽出の基本
+:PROPERTIES:
+:CUSTOM_ID: データ抽出の基本
+:END:
+#+begin_src python
+print(ts_day.head(3))
+print(ts_day.tail(3))
+#+end_src
+
+#+begin_example
+            value
+time             
+1990-01-01    1.0
+1990-01-02    2.0
+1990-01-03    3.0
+             value
+time              
+1999-12-29  3650.0
+1999-12-30  3651.0
+1999-12-31  3652.0
+#+end_example
+
+#+begin_src python
+# 日付の指定
+print(ts_day.loc['1990-01-02'])
+#+end_src
+
+#+begin_example
+value    2.0
+Name: 1990-01-02 00:00:00, dtype: float64
+#+end_example
+
+#+begin_src python
+# 範囲の指定
+print(ts_day.loc['1990-01-02':'1990-01-04'])
+#+end_src
+
+#+begin_example
+            value
+time             
+1990-01-02    2.0
+1990-01-03    3.0
+1990-01-04    4.0
+#+end_example
+
+#+begin_src python
+# 月単位での指定
+print(ts_day.loc['1990-01'])
+#+end_src
+
+#+begin_example
+            value
+time             
+1990-01-01    1.0
+1990-01-02    2.0
+1990-01-03    3.0
+1990-01-04    4.0
+1990-01-05    5.0
+1990-01-06    6.0
+1990-01-07    7.0
+1990-01-08    8.0
+1990-01-09    9.0
+1990-01-10   10.0
+1990-01-11   11.0
+1990-01-12   12.0
+1990-01-13   13.0
+1990-01-14   14.0
+1990-01-15   15.0
+1990-01-16   16.0
+1990-01-17   17.0
+1990-01-18   18.0
+1990-01-19   19.0
+1990-01-20   20.0
+1990-01-21   21.0
+1990-01-22   22.0
+1990-01-23   23.0
+1990-01-24   24.0
+1990-01-25   25.0
+1990-01-26   26.0
+1990-01-27   27.0
+1990-01-28   28.0
+1990-01-29   29.0
+1990-01-30   30.0
+1990-01-31   31.0
+#+end_example
+
+**** 日時の詳細な指定
+:PROPERTIES:
+:CUSTOM_ID: 日時の詳細な指定
+:END:
+#+begin_src python
+time_idx = pd.date_range(start='2020-01-01', end='2021-01-01', 
+                         freq='15min', inclusive='left')
+long_ts = pd.Series(np.arange(0, len(time_idx), 1), index=time_idx)
+
+print(long_ts.head(3))
+print(long_ts.tail(3))
+#+end_src
+
+#+begin_example
+2020-01-01 00:00:00    0
+2020-01-01 00:15:00    1
+2020-01-01 00:30:00    2
+Freq: 15min, dtype: int32
+2020-12-31 23:15:00    35133
+2020-12-31 23:30:00    35134
+2020-12-31 23:45:00    35135
+Freq: 15min, dtype: int32
+#+end_example
+
+#+begin_src python
+# データの長さ
+366 * 24 * 4
+#+end_src
+
+#+begin_example
+35136
+#+end_example
+
+#+begin_src python
+# 日次の指定
+long_ts.loc['2020-12-31 23:30:00']
+#+end_src
+
+#+begin_example
+35134
+#+end_example
+
+#+begin_src python
+# TImestampの作成
+pd.Timestamp(2020, 12, 31, 23, 30, 0)
+#+end_src
+
+#+begin_example
+Timestamp('2020-12-31 23:30:00')
+#+end_example
+
+#+begin_src python
+# Timestampを利用したデータの抽出
+long_ts.loc[pd.Timestamp(2020, 12, 31, 23, 30, 0)]
+#+end_src
+
+#+begin_example
+35134
+#+end_example
+
+#+begin_src python
+long_ts.loc[pd.Timestamp(2020, 12, 30):pd.Timestamp(2020, 12, 31, 10)]
+#+end_src
+
+#+begin_example
+2020-12-30 00:00:00    34944
+2020-12-30 00:15:00    34945
+2020-12-30 00:30:00    34946
+2020-12-30 00:45:00    34947
+2020-12-30 01:00:00    34948
+                       ...  
+2020-12-31 09:00:00    35076
+2020-12-31 09:15:00    35077
+2020-12-31 09:30:00    35078
+2020-12-31 09:45:00    35079
+2020-12-31 10:00:00    35080
+Freq: 15min, Length: 137, dtype: int32
+#+end_example
+
+**** 時間の指定
+:PROPERTIES:
+:CUSTOM_ID: 時間の指定
+:END:
+#+begin_src python
+# 10時のデータのみ抽出
+long_ts.at_time('10:00:00')
+#+end_src
+
+#+begin_example
+2020-01-01 10:00:00       40
+2020-01-02 10:00:00      136
+2020-01-03 10:00:00      232
+2020-01-04 10:00:00      328
+2020-01-05 10:00:00      424
+                       ...  
+2020-12-27 10:00:00    34696
+2020-12-28 10:00:00    34792
+2020-12-29 10:00:00    34888
+2020-12-30 10:00:00    34984
+2020-12-31 10:00:00    35080
+Freq: 1440min, Length: 366, dtype: int32
+#+end_example
+
+#+begin_src python
+# 10時から11時までのデータを抽出
+long_ts.between_time(start_time='10:00:00', end_time='11:00:00', 
+                     inclusive='left')
+#+end_src
+
+#+begin_example
+2020-01-01 10:00:00       40
+2020-01-01 10:15:00       41
+2020-01-01 10:30:00       42
+2020-01-01 10:45:00       43
+2020-01-02 10:00:00      136
+                       ...  
+2020-12-30 10:45:00    34987
+2020-12-31 10:00:00    35080
+2020-12-31 10:15:00    35081
+2020-12-31 10:30:00    35082
+2020-12-31 10:45:00    35083
+Length: 1464, dtype: int32
+#+end_example
+
+*** 日次を用いたデータの集計
+:PROPERTIES:
+:CUSTOM_ID: 日次を用いたデータの集計
+:END:
+**** 日付情報を持つ列の作成
+:PROPERTIES:
+:CUSTOM_ID: 日付情報を持つ列の作成
+:END:
+#+begin_src python
+# 月を表すmonth列を追加する
+ts_day['month'] = ts_day.index.month
+print(ts_day.head(3))
+#+end_src
+
+#+begin_example
+            value  month
+time                    
+1990-01-01    1.0      1
+1990-01-02    2.0      1
+1990-01-03    3.0      1
+#+end_example
+
+#+begin_src python
+# 月ごとの合計値
+print(ts_day.groupby('month').sum())
+#+end_src
+
+#+begin_example
+          value
+month          
+1      514445.0
+2      475961.0
+3      532797.0
+4      524760.0
+5      551707.0
+6      543060.0
+7      570617.0
+8      580227.0
+9      570660.0
+10     599137.0
+11     588960.0
+12     618047.0
+#+end_example
+
+#+begin_src python
+# 参考：applyメソッドの利用
+print(ts_day.groupby('month')['value'].apply(np.sum))
+#+end_src
+
+#+begin_example
+month
+1     514445.0
+2     475961.0
+3     532797.0
+4     524760.0
+5     551707.0
+6     543060.0
+7     570617.0
+8     580227.0
+9     570660.0
+10    599137.0
+11    588960.0
+12    618047.0
+Name: value, dtype: float64
+#+end_example
+
+#+begin_src python
+# 参考：日時情報の列を使わない例
+print(ts_day.groupby(ts_day.index.month).sum())
+#+end_src
+
+#+begin_example
+         value  month
+time                 
+1     514445.0    310
+2     475961.0    564
+3     532797.0    930
+4     524760.0   1200
+5     551707.0   1550
+6     543060.0   1800
+7     570617.0   2170
+8     580227.0   2480
+9     570660.0   2700
+10    599137.0   3100
+11    588960.0   3300
+12    618047.0   3720
+#+end_example
+
+#+begin_src python
+# 参考：年ごと、月ごとの集計
+ts_day.groupby([ts_day.index.year, ts_day.index.month]).sum()
+#+end_src
+
+#+begin_html
+  <style scoped>
+      .dataframe tbody tr th:only-of-type {
+          vertical-align: middle;
+      }
+
+      .dataframe tbody tr th {
+          vertical-align: top;
+      }
+
+      .dataframe thead th {
+          text-align: right;
+      }
+  </style>
+#+end_html
+
+#+begin_html
+  <table border="1" class="dataframe">
+#+end_html
+
+#+begin_html
+  <thead>
+#+end_html
+
+#+begin_html
+  <tr style="text-align: right;">
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+value
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+month
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+time
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+time
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  </thead>
+#+end_html
+
+#+begin_html
+  <tbody>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th rowspan="5" valign="top">
+#+end_html
+
+1990
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+1
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+496.0
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+31
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+2
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+1274.0
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+56
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+3
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+2325.0
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+93
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+4
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+3165.0
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+120
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+5
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+4216.0
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+155
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+...
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+...
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+...
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+...
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th rowspan="5" valign="top">
+#+end_html
+
+1999
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+8
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+108965.0
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+248
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+9
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+106365.0
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+270
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+10
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+110856.0
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+310
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+11
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+108195.0
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+330
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  <tr>
+#+end_html
+
+#+begin_html
+  <th>
+#+end_html
+
+12
+
+#+begin_html
+  </th>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+112747.0
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  <td>
+#+end_html
+
+372
+
+#+begin_html
+  </td>
+#+end_html
+
+#+begin_html
+  </tr>
+#+end_html
+
+#+begin_html
+  </tbody>
+#+end_html
+
+#+begin_html
+  </table>
+#+end_html
+
+#+begin_html
+  <p>
+#+end_html
+
+120 rows × 2 columns
+
+#+begin_html
+  </p>
+#+end_html
+
+*** PeriodIndexの作成と利用
+:PROPERTIES:
+:CUSTOM_ID: periodindexの作成と利用
+:END:
+**** period_range関数の利用
+:PROPERTIES:
+:CUSTOM_ID: period_range関数の利用
+:END:
+#+begin_src python
+period_range = pd.period_range(start='2020-01-01', end='2020-02-01', freq='M')
+period_range
+#+end_src
+
+#+begin_example
+PeriodIndex(['2020-01', '2020-02'], dtype='period[M]')
+#+end_example
+
+#+begin_src python
+type(period_range)
+#+end_src
+
+#+begin_example
+pandas.core.indexes.period.PeriodIndex
+#+end_example
+
+**** DatetimeIndexとPeriodIndexの変換
+:PROPERTIES:
+:CUSTOM_ID: datetimeindexとperiodindexの変換
+:END:
+#+begin_src python
+time_range = pd.date_range(start='2020-01-01', end='2020-02-01', freq='MS')
+time_range
+#+end_src
+
+#+begin_example
+DatetimeIndex(['2020-01-01', '2020-02-01'], dtype='datetime64[ns]', freq='MS')
+#+end_example
+
+#+begin_src python
+# DatetimeIndexをPeriodIndexにする
+time_range.to_period()
+#+end_src
+
+#+begin_example
+PeriodIndex(['2020-01', '2020-02'], dtype='period[M]')
+#+end_example
+
+#+begin_src python
+# PeriodIndexをDatetimeIndexにする
+period_range.to_timestamp()
+#+end_src
+
+#+begin_example
+DatetimeIndex(['2020-01-01', '2020-02-01'], dtype='datetime64[ns]', freq=None)
+#+end_example
+
+**** DataFrameのindexの変換
+:PROPERTIES:
+:CUSTOM_ID: dataframeのindexの変換
+:END:
+#+begin_src python
+print(ts_month)
+#+end_src
+
+#+begin_example
+            sales
+time             
+2000-01-01   10.0
+2000-02-01    5.0
+2000-03-01    8.0
+2000-04-01   14.0
+2000-05-01    9.0
+#+end_example
+
+#+begin_src python
+# 参考：indexを対象に変換することもできる
+ts_month.index.to_period()
+#+end_src
+
+#+begin_example
+PeriodIndex(['2000-01', '2000-02', '2000-03', '2000-04', '2000-05'], dtype='period[M]', name='time')
+#+end_example
+
+#+begin_src python
+# DataFrameに対して直接実行
+ts_month_period = ts_month.copy()
+ts_month_period = ts_month_period.to_period()
+print(ts_month_period)
+#+end_src
+
+#+begin_example
+         sales
+time          
+2000-01   10.0
+2000-02    5.0
+2000-03    8.0
+2000-04   14.0
+2000-05    9.0
+#+end_example
+
+**** PeriodIndexの操作
+:PROPERTIES:
+:CUSTOM_ID: periodindexの操作
+:END:
+#+begin_src python
+# 日付情報の取得
+print('年', period_range.year)
+print('月', period_range.month)
+#+end_src
+
+#+begin_example
+年 Index([2020, 2020], dtype='int64')
+月 Index([1, 2], dtype='int64')
+#+end_example
+
+#+begin_src python
+ts_month_period.loc['2000-04']
+#+end_src
+
+#+begin_example
+sales    14.0
+Name: 2000-04, dtype: float64
+#+end_example
+
+#+begin_src python
+print(ts_month_period.loc['2000-03':'2000-05'])
+#+end_src
+
+#+begin_example
+         sales
+time          
+2000-03    8.0
+2000-04   14.0
+2000-05    9.0
+#+end_example

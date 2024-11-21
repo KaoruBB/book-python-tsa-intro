@@ -1,0 +1,384 @@
+* 第5部　線形ガウス状態空間モデル
+:PROPERTIES:
+:CUSTOM_ID: 第5部-線形ガウス状態空間モデル
+:END:
+** 第6章　状態空間モデルの分析事例
+:PROPERTIES:
+:CUSTOM_ID: 第6章-状態空間モデルの分析事例
+:END:
+*** 分析の準備
+:PROPERTIES:
+:CUSTOM_ID: 分析の準備
+:END:
+#+begin_example
+# 数値計算に使うライブラリ
+import numpy as np
+import pandas as pd
+from scipy import stats
+
+# 統計モデルを推定するライブラリ
+import statsmodels.api as sm
+import statsmodels.tsa.api as tsa
+
+# グラフを描画するライブラリ
+from matplotlib import pylab as plt
+import matplotlib.dates as mdates
+import seaborn as sns
+sns.set()
+
+# 動的なグラフを描画するライブラリ
+import plotly.express as px
+
+# sktimeで状態空間モデルを推定する
+from sktime.forecasting.structural import UnobservedComponents
+
+# グラフの日本語表記
+from matplotlib import rcParams
+rcParams['font.family'] = 'sans-serif'
+rcParams['font.sans-serif'] = 'Meiryo'
+#+end_example
+
+#+begin_example
+# 表示設定
+np.set_printoptions(linewidth=60)
+pd.set_option('display.width', 80)
+
+from matplotlib.pylab import rcParams
+rcParams['figure.figsize'] = 8, 4
+#+end_example
+
+*** 日単位売り上げデータの読み込み
+:PROPERTIES:
+:CUSTOM_ID: 日単位売り上げデータの読み込み
+:END:
+#+begin_example
+# 日単位データの読み込み
+sales_day = pd.read_csv(
+    '5-6-1-daily-sales-data.csv', 
+    index_col='date',
+    parse_dates=True,
+    dtype='float'
+)
+sales_day.index.freq = 'D'
+
+# 結果の確認
+print(sales_day.head(3))
+print(sales_day.tail(3))
+#+end_example
+
+#+begin_example
+# 可視化
+sales_day.plot(subplots=True)
+plt.tight_layout()
+#+end_example
+
+#+begin_example
+# 参考：動的なグラフ
+px.line(sales_day.sales)
+#+end_example
+
+*** 探索的データ分析
+:PROPERTIES:
+:CUSTOM_ID: 探索的データ分析
+:END:
+**** カレンダー情報ごとの集計
+:PROPERTIES:
+:CUSTOM_ID: カレンダー情報ごとの集計
+:END:
+#+begin_example
+# カレンダー情報を入れたデータ
+sales_day_eda = sales_day.copy()
+
+# 月
+sales_day_eda['month'] = sales_day_eda.index.month
+
+# 曜日
+sales_day_eda['weekday'] = sales_day_eda.index.weekday
+
+# 結果の確認
+print(sales_day_eda.head(3))
+#+end_example
+
+#+begin_example
+# 2列のグラフ
+fig, ax = plt.subplots(ncols=2, tight_layout=True)
+
+# 月ごとの売り上げ比較
+sales_day_eda.groupby('month').mean()['sales'].plot(kind='bar', ax=ax[0])
+
+# 曜日ごとの売り上げ比較
+sales_day_eda.groupby('weekday').mean()['sales'].plot(kind='bar', ax=ax[1])
+
+# X軸ラベルを回転させないようにする
+ax[0].xaxis.set_tick_params(rotation=0)
+ax[1].xaxis.set_tick_params(rotation=0)
+#+end_example
+
+**** チラシの効果
+:PROPERTIES:
+:CUSTOM_ID: チラシの効果
+:END:
+#+begin_example
+# チラシの有無別売り上げ平均値
+sales_day_eda.groupby('flyer').mean()['sales']
+#+end_example
+
+#+begin_example
+# ラグをとる
+sales_day_eda['flyer_lag1'] = sales_day_eda['flyer'].shift(1).fillna(0)
+sales_day_eda['flyer_lag2'] = sales_day_eda['flyer'].shift(2).fillna(0)
+
+# チラシを配布した翌日と翌々日の集計
+print(sales_day_eda.groupby('flyer_lag1').mean()['sales'])
+print(sales_day_eda.groupby('flyer_lag2').mean()['sales'])
+#+end_example
+
+#+begin_example
+# チラシをいつ配っているか
+# aiueo
+sales_day_eda.groupby('weekday').sum()['flyer']
+#+end_example
+
+*** 特徴量の作成
+:PROPERTIES:
+:CUSTOM_ID: 特徴量の作成
+:END:
+**** ラグ変数
+:PROPERTIES:
+:CUSTOM_ID: ラグ変数
+:END:
+#+begin_example
+# ラグ特徴量を加える
+sales_day['flyer_lag1'] = sales_day['flyer'].shift(1).fillna(0)
+sales_day['flyer_lag2'] = sales_day['flyer'].shift(2).fillna(0)
+
+# 結果の確認
+print(sales_day.loc['2000-02-17':'2000-02-21'])
+#+end_example
+
+**** 祝日フラグ
+:PROPERTIES:
+:CUSTOM_ID: 祝日フラグ
+:END:
+#+begin_example
+# 祝日を内閣府のWebサイトから読み込む
+holiday = pd.read_csv(
+    'https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv', 
+    encoding='CP932', parse_dates=True, index_col=0
+)
+
+# 結果の確認
+print(holiday.head(3))
+#+end_example
+
+#+begin_example
+# 祝日フラグ
+is_holiday = sales_day.index.isin(holiday.index).astype(int)
+
+# 三が日と年末は祝日扱いにする
+y_st = (sales_day.index.month == 1)  & sales_day.index.day.isin([2, 3])
+y_en = (sales_day.index.month == 12) & sales_day.index.day.isin([30, 31])
+is_holiday = is_holiday + y_st + y_en
+
+# データフレームにまとめる
+sales_day['holiday'] = is_holiday
+
+# 結果の確認
+print(sales_day.head(3))
+#+end_example
+
+#+begin_example
+# 日曜日かつ祝日の日は、通常の祝日と区別する
+sales_day['sun_holiday'] = is_holiday & (sales_day.index.dayofweek == 6)
+
+# 結果の確認
+print(sales_day.head(3))
+#+end_example
+
+*** 単純な基本構造時系列モデルによる分析
+:PROPERTIES:
+:CUSTOM_ID: 単純な基本構造時系列モデルによる分析
+:END:
+**** モデルの推定
+:PROPERTIES:
+:CUSTOM_ID: モデルの推定
+:END:
+#+begin_example
+# 季節変動ありの平滑化トレンドモデル
+mod_bsts_1 = tsa.UnobservedComponents(
+    sales_day['sales'],                       # 対象データ
+    level='smooth trend',                     # 平滑化トレンド
+    seasonal=7,                               # 7日間の周期
+    exog=sales_day[['holiday', 'sun_holiday', # 外生変数
+                    'flyer', 'flyer_lag1', 'flyer_lag2']]
+)
+
+# 最尤法によるパラメータの推定
+res_bsts_1 = mod_bsts_1.fit(
+    method='nm',              # Nelder-Mead法を使う
+    maxiter=5000              # 最大繰り返し数
+)
+#+end_example
+
+#+begin_example
+print(res_bsts_1.params)
+#+end_example
+
+**** 残差診断
+:PROPERTIES:
+:CUSTOM_ID: 残差診断
+:END:
+#+begin_example
+# 残差のチェック
+_ = res_bsts_1.plot_diagnostics(lags=30,
+        fig=plt.figure(tight_layout=True, figsize=(15, 8)))
+#+end_example
+
+#+begin_example
+# 1時点前から30時点前まで、1つずつ最大次数をずらして、30回検定を行う
+res_test = res_bsts_1.test_serial_correlation(
+    method='ljungbox', lags=30)
+
+# グラフサイズの指定
+fig, ax = plt.subplots(figsize=(8, 2), tight_layout=True)
+
+# p値のグラフを描画
+ax.scatter(np.arange(1,31), res_test[0][1])
+
+# 高さ0.05の位置に赤線を引く
+ax.plot(np.arange(1,31), np.tile(0.05, 30), color='red')
+#+end_example
+
+*** 短期と長期の変動の追加
+:PROPERTIES:
+:CUSTOM_ID: 短期と長期の変動の追加
+:END:
+**** モデルの推定
+:PROPERTIES:
+:CUSTOM_ID: モデルの推定-1
+:END:
+#+begin_example
+# 季節変動ありの平滑化トレンドモデル
+mod_bsts_2 = tsa.UnobservedComponents(
+    sales_day['sales'],                       # 対象データ
+    level='smooth trend',                     # 平滑化トレンド
+    seasonal=7,                               # 7日間の周期
+    exog=sales_day[['holiday', 'sun_holiday', # 外生変数
+                    'flyer', 'flyer_lag1', 'flyer_lag2']],
+    autoregressive=2,                                  # 2次の自己回帰成分
+    freq_seasonal=[{'period':365.25, 'harmonics':1}]   # 1年間の周期
+)
+
+# 最尤法によるパラメータの推定
+res_bsts_2 = mod_bsts_2.fit(
+    method='nm',              # Nelder-Mead法を使う
+    maxiter=5000              # 最大繰り返し数
+)
+#+end_example
+
+#+begin_example
+print(res_bsts_2.params)
+#+end_example
+
+**** 残差診断
+:PROPERTIES:
+:CUSTOM_ID: 残差診断-1
+:END:
+#+begin_example
+# 残差のチェック
+_ = res_bsts_2.plot_diagnostics(lags=30, 
+        fig=plt.figure(tight_layout=True, figsize=(15, 8)))
+#+end_example
+
+#+begin_example
+# 1時点前から30時点前まで、1つずつ最大次数をずらして、24回検定を行う
+res_test = res_bsts_2.test_serial_correlation(
+    method='ljungbox', lags=30)
+
+# グラフサイズの指定
+fig, ax = plt.subplots(figsize=(8, 2), tight_layout=True)
+
+# p値のグラフを描画
+ax.scatter(np.arange(1,31), res_test[0][1])
+
+# 高さ0.05の位置に赤線を引く
+ax.plot(np.arange(1,31), np.tile(0.05, 30), color='red')
+#+end_example
+
+**** 2つのモデルの比較
+:PROPERTIES:
+:CUSTOM_ID: つのモデルの比較
+:END:
+#+begin_example
+# 2つのモデルの比較(水準成分)
+
+# DataFrameにまとめる
+plot_df = pd.DataFrame({
+    'sales': sales_day['sales'],
+    'mod1_level': res_bsts_1.level['smoothed'],
+    'mod2_level': res_bsts_2.level['smoothed']
+})
+
+# 可視化
+# グラフサイズの指定
+fig, ax = plt.subplots(figsize=(8, 4), tight_layout=True)
+
+# 折れ線グラフを描く
+ax.plot(plot_df['sales'], color='black', label='原系列')
+ax.plot(plot_df['mod1_level'], linewidth=3, color='orange',
+        label='単純なモデル')
+ax.plot(plot_df['mod2_level'], linewidth=3, color='red',
+        label='複雑な周期を持つモデル')
+
+# 軸ラベルとタイトル・凡例
+ax.set_xlabel('年月', size=14)
+ax.set_ylabel('売り上げ', size=14)
+ax.legend()
+
+# 軸の指定
+# 半年ごとに軸を載せる
+ax.xaxis.set_major_locator(mdates.MonthLocator([1,6]))
+
+# 軸ラベルのフォーマット
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y年%m月'))
+#+end_example
+
+#+begin_example
+# ドリフト成分の比較
+print('単純なモデルのドリフト成分', res_bsts_1.trend['smoothed'][-1])
+print('複雑なモデルのドリフト成分', res_bsts_2.trend['smoothed'][-1])
+#+end_example
+
+*** sktimeの利用
+:PROPERTIES:
+:CUSTOM_ID: sktimeの利用
+:END:
+#+begin_example
+# 日付インデックスをPeriodIndexに修正する
+sales_day_sk = sales_day.copy()
+sales_day_sk = sales_day_sk.to_period()
+#+end_example
+
+#+begin_example
+# 予測器
+forecaster = UnobservedComponents(
+    level='smooth trend',     # 平滑化トレンド
+    seasonal=7,               # 7日間の周期
+    autoregressive=2,                                   # 2次の自己回帰成分
+    freq_seasonal=[{'period':365.25, 'harmonics':1}],   # 1年間の周期
+    method='nm',              # Nelder-Mead法を使う
+    maxiter=5000              # 最大繰り返し数
+)
+
+# データへの当てはめ
+forecaster.fit(
+    sales_day_sk['sales'],
+    sales_day_sk[['holiday', 'sun_holiday', 
+                  'flyer', 'flyer_lag1', 'flyer_lag2']]
+)
+#+end_example
+
+#+begin_example
+# 参考
+print(forecaster.summary())
+#+end_example

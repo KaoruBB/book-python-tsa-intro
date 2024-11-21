@@ -1,0 +1,631 @@
+* 第2部　Pythonによる時系列分析の基本
+:PROPERTIES:
+:CUSTOM_ID: 第2部-pythonによる時系列分析の基本
+:END:
+** 第2章　Pythonの基本
+:PROPERTIES:
+:CUSTOM_ID: 第2章-pythonの基本
+:END:
+*** 基本的な演算
+:PROPERTIES:
+:CUSTOM_ID: 基本的な演算
+:END:
+#+begin_src python
+# 足し算
+1 + 1
+#+end_src
+
+#+begin_example
+2
+#+end_example
+
+#+begin_src python
+# 引き算
+3 - 1
+#+end_src
+
+#+begin_example
+2
+#+end_example
+
+#+begin_src python
+# 掛け算
+2 * 3
+#+end_src
+
+#+begin_example
+6
+#+end_example
+
+#+begin_src python
+# 割り算
+5 / 2
+#+end_src
+
+#+begin_example
+2.5
+#+end_example
+
+#+begin_src python
+# 累乗
+2 ** 4
+#+end_src
+
+#+begin_example
+16
+#+end_example
+
+#+begin_src python
+# やや複雑な計算
+2 ** (1 / 2)
+#+end_src
+
+#+begin_example
+1.4142135623730951
+#+end_example
+
+*** 文字列
+:PROPERTIES:
+:CUSTOM_ID: 文字列
+:END:
+#+begin_src python
+'A'
+#+end_src
+
+#+begin_example
+'A'
+#+end_example
+
+#+begin_src python
+"A"
+#+end_src
+
+#+begin_example
+'A'
+#+end_example
+
+*** 変数
+:PROPERTIES:
+:CUSTOM_ID: 変数
+:END:
+**** 変数の基本
+:PROPERTIES:
+:CUSTOM_ID: 変数の基本
+:END:
+#+begin_src python
+x = 5
+x
+#+end_src
+
+#+begin_example
+5
+#+end_example
+
+#+begin_src python
+x + 3
+#+end_src
+
+#+begin_example
+8
+#+end_example
+
+**** 複数の変数の定義
+:PROPERTIES:
+:CUSTOM_ID: 複数の変数の定義
+:END:
+#+begin_src python
+a, b = 1, 2
+#+end_src
+
+#+begin_src python
+a
+#+end_src
+
+#+begin_example
+1
+#+end_example
+
+#+begin_src python
+b
+#+end_src
+
+#+begin_example
+2
+#+end_example
+
+*** 関数
+:PROPERTIES:
+:CUSTOM_ID: 関数
+:END:
+**** 関数の作成
+:PROPERTIES:
+:CUSTOM_ID: 関数の作成
+:END:
+#+begin_src python
+def my_func(hikisu):
+    return hikisu * 2
+#+end_src
+
+#+begin_src python
+my_func(x)
+#+end_src
+
+#+begin_example
+10
+#+end_example
+
+**** 頻繁に使う関数
+:PROPERTIES:
+:CUSTOM_ID: 頻繁に使う関数
+:END:
+#+begin_src python
+# print関数
+print('足し算　1 + 2 = ', 1 + 2)
+print('引き算　1 - 2 = ', 1 - 2)
+#+end_src
+
+#+begin_example
+足し算　1 + 2 =  3
+引き算　1 - 2 =  -1
+#+end_example
+
+#+begin_src python
+# round関数
+round(2.345, 2)
+#+end_src
+
+#+begin_example
+2.35
+#+end_example
+
+#+begin_src python
+help(round)
+#+end_src
+
+#+begin_example
+Help on built-in function round in module builtins:
+
+round(number, ndigits=None)
+    Round a number to a given precision in decimal digits.
+
+    The return value is an integer if ndigits is omitted or None.  Otherwise
+    the return value has the same type as the number.  ndigits may be negative.
+#+end_example
+
+*** type関数とdir関数の利用
+:PROPERTIES:
+:CUSTOM_ID: type関数とdir関数の利用
+:END:
+#+begin_src python
+type('ABC')
+#+end_src
+
+#+begin_example
+str
+#+end_example
+
+#+begin_src python
+dir('ABC')
+#+end_src
+
+#+begin_example
+['__add__',
+ '__class__',
+ '__contains__',
+ '__delattr__',
+ '__dir__',
+ '__doc__',
+ '__eq__',
+ '__format__',
+ '__ge__',
+ '__getattribute__',
+ '__getitem__',
+ '__getnewargs__',
+ '__getstate__',
+ '__gt__',
+ '__hash__',
+ '__init__',
+ '__init_subclass__',
+ '__iter__',
+ '__le__',
+ '__len__',
+ '__lt__',
+ '__mod__',
+ '__mul__',
+ '__ne__',
+ '__new__',
+ '__reduce__',
+ '__reduce_ex__',
+ '__repr__',
+ '__rmod__',
+ '__rmul__',
+ '__setattr__',
+ '__sizeof__',
+ '__str__',
+ '__subclasshook__',
+ 'capitalize',
+ 'casefold',
+ 'center',
+ 'count',
+ 'encode',
+ 'endswith',
+ 'expandtabs',
+ 'find',
+ 'format',
+ 'format_map',
+ 'index',
+ 'isalnum',
+ 'isalpha',
+ 'isascii',
+ 'isdecimal',
+ 'isdigit',
+ 'isidentifier',
+ 'islower',
+ 'isnumeric',
+ 'isprintable',
+ 'isspace',
+ 'istitle',
+ 'isupper',
+ 'join',
+ 'ljust',
+ 'lower',
+ 'lstrip',
+ 'maketrans',
+ 'partition',
+ 'removeprefix',
+ 'removesuffix',
+ 'replace',
+ 'rfind',
+ 'rindex',
+ 'rjust',
+ 'rpartition',
+ 'rsplit',
+ 'rstrip',
+ 'split',
+ 'splitlines',
+ 'startswith',
+ 'strip',
+ 'swapcase',
+ 'title',
+ 'translate',
+ 'upper',
+ 'zfill']
+#+end_example
+
+#+begin_src python
+'ABC'.lower()
+#+end_src
+
+#+begin_example
+'abc'
+#+end_example
+
+#+begin_src python
+help('ABC'.lower)
+#+end_src
+
+#+begin_example
+Help on built-in function lower:
+
+lower() method of builtins.str instance
+    Return a copy of the string converted to lowercase.
+#+end_example
+
+*** list
+:PROPERTIES:
+:CUSTOM_ID: list
+:END:
+**** listの基本
+:PROPERTIES:
+:CUSTOM_ID: listの基本
+:END:
+#+begin_src python
+my_list = [1, 2, 3, 4]
+my_list
+#+end_src
+
+#+begin_example
+[1, 2, 3, 4]
+#+end_example
+
+#+begin_src python
+my_list[0]
+#+end_src
+
+#+begin_example
+1
+#+end_example
+
+**** listに対する関数の適用
+:PROPERTIES:
+:CUSTOM_ID: listに対する関数の適用
+:END:
+#+begin_src python
+len(my_list)
+#+end_src
+
+#+begin_example
+4
+#+end_example
+
+#+begin_src python
+sum(my_list)
+#+end_src
+
+#+begin_example
+10
+#+end_example
+
+*** 辞書型
+:PROPERTIES:
+:CUSTOM_ID: 辞書型
+:END:
+#+begin_src python
+my_dict = {
+    'A':3,
+    'B':7
+}
+my_dict
+#+end_src
+
+#+begin_example
+{'A': 3, 'B': 7}
+#+end_example
+
+#+begin_src python
+my_dict['A']
+#+end_src
+
+#+begin_example
+3
+#+end_example
+
+*** for構文
+:PROPERTIES:
+:CUSTOM_ID: for構文
+:END:
+#+begin_src python
+for i in range(0, 3):
+    print(i)
+#+end_src
+
+#+begin_example
+0
+1
+2
+#+end_example
+
+#+begin_src python
+for i in [1, 3, 5, 7]:
+    print(i)
+#+end_src
+
+#+begin_example
+1
+3
+5
+7
+#+end_example
+
+*** if構文
+:PROPERTIES:
+:CUSTOM_ID: if構文
+:END:
+#+begin_src python
+def check_num(data):
+    if(data < 0):
+        return '0未満です'
+    else:
+        return '0以上です'
+#+end_src
+
+#+begin_src python
+for i in range(-2, 2):
+    print('i =', i, 'の判別結果', check_num(i))
+#+end_src
+
+#+begin_example
+i = -2 の判別結果 0未満です
+i = -1 の判別結果 0未満です
+i = 0 の判別結果 0以上です
+i = 1 の判別結果 0以上です
+#+end_example
+
+*** numpyの利用
+:PROPERTIES:
+:CUSTOM_ID: numpyの利用
+:END:
+#+begin_src python
+import numpy as np
+#+end_src
+
+**** ndarray
+:PROPERTIES:
+:CUSTOM_ID: ndarray
+:END:
+#+begin_src python
+my_array = np.array([1,2,3,4])
+my_array
+#+end_src
+
+#+begin_example
+array([1, 2, 3, 4])
+#+end_example
+
+**** numpyが提供するndarrayを作る関数
+:PROPERTIES:
+:CUSTOM_ID: numpyが提供するndarrayを作る関数
+:END:
+#+begin_src python
+np.zeros(4)
+#+end_src
+
+#+begin_example
+array([0., 0., 0., 0.])
+#+end_example
+
+#+begin_src python
+np.tile(0, 4)
+#+end_src
+
+#+begin_example
+array([0, 0, 0, 0])
+#+end_example
+
+#+begin_src python
+np.arange(0, 0.8, 0.1)
+#+end_src
+
+#+begin_example
+array([0. , 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+#+end_example
+
+**** numpyが提供する関数の利用
+:PROPERTIES:
+:CUSTOM_ID: numpyが提供する関数の利用
+:END:
+#+begin_src python
+np.sum(my_array)
+#+end_src
+
+#+begin_example
+10
+#+end_example
+
+#+begin_src python
+np.cumsum(my_array)
+#+end_src
+
+#+begin_example
+array([ 1,  3,  6, 10])
+#+end_example
+
+#+begin_src python
+np.log2(my_array)
+#+end_src
+
+#+begin_example
+array([0.       , 1.       , 1.5849625, 2.       ])
+#+end_example
+
+#+begin_src python
+np.log(my_array)
+#+end_src
+
+#+begin_example
+array([0.        , 0.69314718, 1.09861229, 1.38629436])
+#+end_example
+
+*** pandasの利用
+:PROPERTIES:
+:CUSTOM_ID: pandasの利用
+:END:
+#+begin_src python
+import pandas as pd
+#+end_src
+
+**** DataFrame
+:PROPERTIES:
+:CUSTOM_ID: dataframe
+:END:
+#+begin_src python
+my_df = pd.DataFrame({
+    'A': np.zeros(4), 
+    'B': np.log(my_array)
+})
+print(my_df)
+#+end_src
+
+#+begin_example
+     A         B
+0  0.0  0.000000
+1  0.0  0.693147
+2  0.0  1.098612
+3  0.0  1.386294
+#+end_example
+
+#+begin_src python
+my_df['B']
+#+end_src
+
+#+begin_example
+0    0.000000
+1    0.693147
+2    1.098612
+3    1.386294
+Name: B, dtype: float64
+#+end_example
+
+#+begin_src python
+my_df.B
+#+end_src
+
+#+begin_example
+0    0.000000
+1    0.693147
+2    1.098612
+3    1.386294
+Name: B, dtype: float64
+#+end_example
+
+**** Series
+:PROPERTIES:
+:CUSTOM_ID: series
+:END:
+#+begin_src python
+my_series = pd.Series(np.zeros(4))
+my_series
+#+end_src
+
+#+begin_example
+0    0.0
+1    0.0
+2    0.0
+3    0.0
+dtype: float64
+#+end_example
+
+**** indexの設定
+:PROPERTIES:
+:CUSTOM_ID: indexの設定
+:END:
+#+begin_src python
+my_series.index = np.array([5, 9, 2, 8])
+my_series
+#+end_src
+
+#+begin_example
+5    0.0
+9    0.0
+2    0.0
+8    0.0
+dtype: float64
+#+end_example
+
+**** apply
+:PROPERTIES:
+:CUSTOM_ID: apply
+:END:
+#+begin_src python
+print(my_df.apply(np.exp))
+#+end_src
+
+#+begin_example
+     A    B
+0  1.0  1.0
+1  1.0  2.0
+2  1.0  3.0
+3  1.0  4.0
+#+end_example
+
+#+begin_src python
+print(my_df.apply(np.exp).apply(my_func))
+#+end_src
+
+#+begin_example
+     A    B
+0  2.0  2.0
+1  2.0  4.0
+2  2.0  6.0
+3  2.0  8.0
+#+end_example
