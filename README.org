@@ -1,0 +1,33 @@
+#+title: Readme
+* Introduction
+書籍『Pythonではじめる時系列分析入門』のサンプルコードをorg-modeで実行するためのforkです。
+* 環境構築
+
+#+begin_src sh
+ls
+#+end_src
+
+#+RESULTS:
+| README.md      |
+| README.org     |
+| book-data      |
+| 環境構築用資料 |
+
+pythonのインストール
+#+begin_src sh
+pyenv install 3.12
+pyenv local 3.12
+#+end_src
+
+仮想環境の作成
+#+begin_src sh
+python -m venv py_tsa_venv
+source py_tsa_venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+#+end_src
+
+jupyter kernelの作成
+#+begin_src sh
+python -m ipykernel install --user --name=py_tsa
+#+end_src
