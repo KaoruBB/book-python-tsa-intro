@@ -103,7 +103,7 @@ python-dateutil==2.9.0.post0
 python-json-logger==2.0.7
 pytorch-lightning==2.4.0
 pytz==2024.2
-pywin32==306
+# pywin32==306 # This is not compatible with macOS
 pywinpty==2.0.13
 PyYAML==6.0.2
 pyzmq==26.2.0
