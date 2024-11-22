@@ -33,9 +33,7 @@ from sktime.performance_metrics.forecasting import (
 )
 
 # グラフの日本語表記
-from matplotlib import rcParams
-rcParams['font.family'] = 'sans-serif'
-rcParams['font.sans-serif'] = 'Meiryo'
+import japanize_matplotlib
 #+end_src
 
 #+RESULTS:
@@ -45,8 +43,8 @@ rcParams['font.sans-serif'] = 'Meiryo'
 np.set_printoptions(linewidth=60)
 pd.set_option('display.width', 60)
 
-from matplotlib.pylab import rcParams
-rcParams['figure.figsize'] = 8, 4
+# from matplotlib.pylab import rcParams
+# rcParams['figure.figsize'] = 8, 4
 #+end_src
 
 #+RESULTS:
@@ -95,7 +93,6 @@ print(naive_pred.head(3))
 : 1958-02-01    336
 : 1958-03-01    336
 
-
 *** 季節ナイーブ予測
 :PROPERTIES:
 :CUSTOM_ID: 季節ナイーブ予測
@@ -107,12 +104,11 @@ s_naive_pred.index=test.index
 print(s_naive_pred.head(3))
 #+end_src
 
-#+begin_example
-            value
-1958-01-01    315
-1958-02-01    301
-1958-03-01    356
-#+end_example
+#+RESULTS:
+:             value
+: 1958-01-01    315
+: 1958-02-01    301
+: 1958-03-01    356
 
 *** 平均値予測
 :PROPERTIES:
@@ -125,12 +121,11 @@ mean_pred = pd.DataFrame({'value':np.tile(train.mean(), len(test))},
 print(mean_pred.head(3))
 #+end_src
 
-#+begin_example
-                 value
-1958-01-01  230.898148
-1958-02-01  230.898148
-1958-03-01  230.898148
-#+end_example
+#+RESULTS:
+:                  value
+: 1958-01-01  230.898148
+: 1958-02-01  230.898148
+: 1958-03-01  230.898148
 
 *** 移動平均法による予測
 :PROPERTIES:
@@ -144,12 +139,11 @@ ma_pred = pd.DataFrame({'value':np.tile(train.loc['1957-1':'1957-12'].mean(),
 print(ma_pred.head(3))
 #+end_src
 
-#+begin_example
-                 value
-1958-01-01  368.416667
-1958-02-01  368.416667
-1958-03-01  368.416667
-#+end_example
+#+RESULTS:
+:                  value
+: 1958-01-01  368.416667
+: 1958-02-01  368.416667
+: 1958-03-01  368.416667
 
 *** ドリフト予測
 :PROPERTIES:
@@ -161,10 +155,10 @@ drift = (train.loc['1957-12-01'] - train.loc['1949-01-01']) / (len(train) - 1)
 drift
 #+end_src
 
-#+begin_example
-value    2.093458
-dtype: float64
-#+end_example
+#+RESULTS:
+: value    2.093458
+: dtype: float64
+
 
 #+begin_src jupyter-python
 # ドリフトの累積和を最終時点のデータに加えることで予測値を求める
@@ -175,18 +169,18 @@ drift_pred = pd.DataFrame({
 print(drift_pred.head(3))
 #+end_src
 
-#+begin_example
-                 value
-1958-01-01  338.093458
-1958-02-01  340.186916
-1958-03-01  342.280374
-#+end_example
+#+RESULTS:
+:                  value
+: 1958-01-01  338.093458
+: 1958-02-01  340.186916
+: 1958-03-01  342.280374
 
 *** 予測手法の比較
 :PROPERTIES:
 :CUSTOM_ID: 予測手法の比較
 :END:
-#+begin_src jupyter-python
+#+begin_src jupyter-python :file ./images/3-1-9.png :results output file
+
 # グラフサイズの指定
 fig, ax = plt.subplots(figsize=(8, 4))
 
@@ -205,12 +199,8 @@ ax.plot(drift_pred['value'], label='ドリフト予測')
 ax.legend()
 #+end_src
 
-#+begin_example
-<matplotlib.legend.Legend at 0x21797f4b1a0>
-#+end_example
-
-#+caption: png
-[[file:3-1-%E5%8D%98%E7%B4%94%E3%81%AA%E6%99%82%E7%B3%BB%E5%88%97%E5%88%86%E6%9E%90%E6%89%8B%E6%B3%95_files/3-1-%E5%8D%98%E7%B4%94%E3%81%AA%E6%99%82%E7%B3%BB%E5%88%97%E5%88%86%E6%9E%90%E6%89%8B%E6%B3%95_19_1.png]]
+#+RESULTS:
+[[./images/3-1-9.png]]
 
 *** MAE
 :PROPERTIES:
@@ -220,10 +210,10 @@ ax.legend()
 np.abs(test - naive_pred).mean()
 #+end_src
 
-#+begin_example
-value    94.944444
-dtype: float64
-#+end_example
+#+RESULTS:
+: value    94.944444
+: dtype: float64
+
 
 #+begin_src jupyter-python
 # MAE
@@ -234,13 +224,12 @@ print('移動平均予測：', mean_absolute_error(test, ma_pred))
 print('ドリフト予測：', mean_absolute_error(test, drift_pred))
 #+end_src
 
-#+begin_example
-持続予測　　： 94.94444444444444
-季節ナイーブ： 60.083333333333336
-平均値予測　： 197.60185185185188
-移動平均予測： 74.06018518518519
-ドリフト予測： 62.84215991692627
-#+end_example
+#+RESULTS:
+: 持続予測　　： 94.94444444444444
+: 季節ナイーブ： 60.083333333333336
+: 平均値予測　： 197.60185185185188
+: 移動平均予測： 74.06018518518519
+: ドリフト予測： 62.84215991692627
 
 *** MSE
 :PROPERTIES:
@@ -250,10 +239,10 @@ print('ドリフト予測：', mean_absolute_error(test, drift_pred))
 ((test - naive_pred) ** 2).mean()
 #+end_src
 
-#+begin_example
-value    14674.555556
-dtype: float64
-#+end_example
+#+RESULTS:
+: value    14674.555556
+: dtype: float64
+
 
 #+begin_src jupyter-python
 # MSE
@@ -264,13 +253,12 @@ print('移動平均予測：', mean_squared_error(test, ma_pred))
 print('ドリフト予測：', mean_squared_error(test, drift_pred))
 #+end_src
 
-#+begin_example
-持続予測　　： 14674.555555555555
-季節ナイーブ： 5418.75
-平均値予測　： 45164.797410836756
-移動平均予測： 9728.312499999996
-ドリフト予測： 7695.698285148635
-#+end_example
+#+RESULTS:
+: 持続予測　　： 14674.555555555555
+: 季節ナイーブ： 5418.75
+: 平均値予測　： 45164.797410836756
+: 移動平均予測： 9728.312499999996
+: ドリフト予測： 7695.698285148635
 
 *** RMSE
 :PROPERTIES:
@@ -280,10 +268,10 @@ print('ドリフト予測：', mean_squared_error(test, drift_pred))
 np.sqrt(((test - naive_pred)**2).mean())
 #+end_src
 
-#+begin_example
-value    121.13858
-dtype: float64
-#+end_example
+#+RESULTS:
+: value    121.13858
+: dtype: float64
+
 
 #+begin_src jupyter-python
 # RMSE
@@ -294,13 +282,12 @@ print('移動平均予測：', np.sqrt(mean_squared_error(test, ma_pred)))
 print('ドリフト予測：', np.sqrt(mean_squared_error(test, drift_pred)))
 #+end_src
 
-#+begin_example
-持続予測　　： 121.13857996342682
-季節ナイーブ： 73.61215932167728
-平均値予測　： 212.52011060329505
-移動平均予測： 98.63220822834697
-ドリフト予測： 87.7251291543571
-#+end_example
+#+RESULTS:
+: 持続予測　　： 121.13857996342682
+: 季節ナイーブ： 73.61215932167728
+: 平均値予測　： 212.52011060329505
+: 移動平均予測： 98.63220822834697
+: ドリフト予測： 87.7251291543571
 
 *** MAPE
 :PROPERTIES:
@@ -310,10 +297,10 @@ print('ドリフト予測：', np.sqrt(mean_squared_error(test, drift_pred)))
 (np.abs(test - naive_pred) / test).mean()
 #+end_src
 
-#+begin_example
-value    0.198867
-dtype: float64
-#+end_example
+#+RESULTS:
+: value    0.198867
+: dtype: float64
+
 
 #+begin_src jupyter-python
 # MAPE
@@ -324,13 +311,12 @@ print('移動平均予測：', mean_absolute_percentage_error(test, ma_pred))
 print('ドリフト予測：', mean_absolute_percentage_error(test, drift_pred))
 #+end_src
 
-#+begin_example
-持続予測　　： 0.19886711926999853
-季節ナイーブ： 0.13189432350948402
-平均値予測　： 0.4441010032912314
-移動平均予測： 0.15522265083435094
-ドリフト予測： 0.12990464190138912
-#+end_example
+#+RESULTS:
+: 持続予測　　： 0.19886711926999853
+: 季節ナイーブ： 0.13189432350948402
+: 平均値予測　： 0.4441010032912314
+: 移動平均予測： 0.15522265083435094
+: ドリフト予測： 0.12990464190138912
 
 *** MASE
 :PROPERTIES:
@@ -343,19 +329,19 @@ naive_error = np.abs(train['1949-02':'1957-12'].values -
 naive_error
 #+end_src
 
-#+begin_example
-20.317757009345794
-#+end_example
+#+RESULTS:
+: 20.317757009345794
+
 
 #+begin_src jupyter-python
 # MASE
 (np.abs(test - naive_pred) / naive_error).mean()
 #+end_src
 
-#+begin_example
-value    4.672979
-dtype: float64
-#+end_example
+#+RESULTS:
+: value    4.672979
+: dtype: float64
+
 
 #+begin_src jupyter-python
 # MASE
@@ -371,10 +357,9 @@ print('ドリフト予測：', mean_absolute_scaled_error(test, drift_pred,
                                             y_train=train))
 #+end_src
 
-#+begin_example
-持続予測　　： 4.672978636410099
-季節ナイーブ： 2.9571833793314934
-平均値予測　： 9.725574125183142
-移動平均予測： 3.645096510954377
-ドリフト予測： 3.0929673924154146
-#+end_example
+#+RESULTS:
+: 持続予測　　： 4.672978636410099
+: 季節ナイーブ： 2.9571833793314934
+: 平均値予測　： 9.725574125183142
+: 移動平均予測： 3.645096510954377
+: ドリフト予測： 3.0929673924154146
