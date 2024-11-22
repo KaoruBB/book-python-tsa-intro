@@ -153,3 +153,4 @@ websocket-client==1.8.0
 xarray==2024.7.0
 xgboost==2.1.1
 yarl==1.11.1
+japanize_matplotlib
