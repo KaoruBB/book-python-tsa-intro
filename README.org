@@ -1,6 +1,6 @@
 #+title: Readme
 * Introduction
-書籍『Pythonではじめる時系列分析入門』のサンプルコードをorg-modeで実行するためのforkです。
+ 馬場 真哉 著 『Pythonではじめる時系列分析入門』のサンプルコードをorg-modeで実行するためのforkです。
 * 環境構築
 
 #+begin_src sh
@@ -24,7 +24,7 @@ pyenv local 3.12
 python -m venv py_tsa_venv
 source py_tsa_venv/bin/activate
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r 環境構築用資料/requirements.txt
 #+end_src
 
 jupyter kernelの作成

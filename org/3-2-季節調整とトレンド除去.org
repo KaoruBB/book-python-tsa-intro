@@ -1,7 +1,7 @@
 * 第3部　基本的な時系列予測の手法
 :PROPERTIES:
 :CUSTOM_ID: 第3部-基本的な時系列予測の手法
-:header-args:jupyter-python: :session tsa :kernel py_tsa :async yes :tangle yes
+:header-args:jupyter-python: :session tsa :kernel py_tsa :async yes :tangle yes :exports both
 :END:
 ** 第2章　季節調整とトレンド除去
 :PROPERTIES:
@@ -624,7 +624,6 @@ sum((desea_sk_mul['value'] - deseasonalized_mul.to_period()) ** 2)
 #+RESULTS:
 : 6.8783622225478815e-25
 
-
 *** 線形回帰分析によるトレンド除去
 :PROPERTIES:
 :CUSTOM_ID: 線形回帰分析によるトレンド除去
@@ -751,7 +750,6 @@ sum((detrend_ols_mul.to_period() - detrend_ols_sk_mul['value']) ** 2)
 
 #+RESULTS:
 : 1.654142710635309e-29
-
 
 *** 差分による季節調整とトレンド除去
 :PROPERTIES:
