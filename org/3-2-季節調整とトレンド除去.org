@@ -1,6 +1,7 @@
 * 第3部　基本的な時系列予測の手法
 :PROPERTIES:
 :CUSTOM_ID: 第3部-基本的な時系列予測の手法
+:header-args:jupyter-python: :session tsa :kernel py_tsa :async yes :tangle yes
 :END:
 ** 第2章　季節調整とトレンド除去
 :PROPERTIES:
@@ -10,7 +11,7 @@
 :PROPERTIES:
 :CUSTOM_ID: 分析の準備
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # 数値計算に使うライブラリ
 import numpy as np
 import pandas as pd
@@ -35,21 +36,21 @@ from sktime.transformations.series.difference import Differencer
 from statsmodels.tsa.deterministic import TimeTrend
 
 # グラフの日本語表記
-from matplotlib import rcParams
-rcParams['font.family'] = 'sans-serif'
-rcParams['font.sans-serif'] = 'Meiryo'
+import japanize_matplotlib
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python
 # 表示設定
 np.set_printoptions(linewidth=60)
 pd.set_option('display.width', 60)
 
-from matplotlib.pylab import rcParams
-rcParams['figure.figsize'] = 8, 4
+# from matplotlib.pylab import rcParams
+# rcParams['figure.figsize'] = 8, 4
 #+end_src
 
-#+begin_src python
+#+begin_src jupyter-python
 # 飛行機乗客数データの読み込み
 air_passengers = sm.datasets.get_rdataset("AirPassengers").data
 
@@ -61,6 +62,30 @@ air_passengers.index = pd.date_range(
 air_passengers = air_passengers.drop(air_passengers.columns[0], axis=1)
 #+end_src
 
+#+RESULTS:
+
+#+begin_src jupyter-python
+print(air_passengers)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+            value
+1949-01-01    112
+1949-02-01    118
+1949-03-01    132
+1949-04-01    129
+1949-05-01    121
+...           ...
+1960-08-01    606
+1960-09-01    508
+1960-10-01    461
+1960-11-01    390
+1960-12-01    432
+
+[144 rows x 1 columns]
+#+end_example
+
 *** 移動平均法による加法型の季節調整
 :PROPERTIES:
 :CUSTOM_ID: 移動平均法による加法型の季節調整
@@ -69,7 +94,7 @@ air_passengers = air_passengers.drop(air_passengers.columns[0], axis=1)
 :PROPERTIES:
 :CUSTOM_ID: トレンドと循環成分
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # 12時点移動平均
 ma_12 = air_passengers['value'].rolling(window=12, center=True).mean()
 
@@ -79,6 +104,7 @@ trend = ma_12.rolling(window=2).mean().shift(-1)
 trend['1949']
 #+end_src
 
+#+RESULTS:
 #+begin_example
 1949-01-01           NaN
 1949-02-01           NaN
@@ -95,41 +121,34 @@ trend['1949']
 Freq: MS, Name: value, dtype: float64
 #+end_example
 
-#+begin_src python
+
+#+begin_src jupyter-python :file ./images/3-2-3-1.png :results output file
 # 参考：原系列とトレンド成分
 air_passengers.plot()
 trend.plot()
 #+end_src
 
-#+begin_example
-<Axes: >
-#+end_example
-
-#+caption: png
-[[file:3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_files/3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_8_1.png]]
+#+RESULTS:
+[[./images/3-2-3-1.png]]
 
 **** トレンド除去
 :PROPERTIES:
 :CUSTOM_ID: トレンド除去
 :END:
-#+begin_src python
+#+begin_src jupyter-python  :file ./images/3-2-3-2.png :results output file
 # トレンドを排除した結果
 detrend = air_passengers['value'] - trend
 detrend.plot()
 #+end_src
 
-#+begin_example
-<Axes: >
-#+end_example
-
-#+caption: png
-[[file:3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_files/3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_10_1.png]]
+#+RESULTS:
+[[./images/3-2-3-2.png]]
 
 **** 季節成分
 :PROPERTIES:
 :CUSTOM_ID: 季節成分
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # トレンド除去後の結果を月ごとに平均する
 seasonal_year = detrend.groupby(detrend.index.month).mean()
 
@@ -139,6 +158,7 @@ seasonal_year = seasonal_year - np.mean(seasonal_year)
 seasonal_year
 #+end_src
 
+#+RESULTS:
 #+begin_example
 1    -24.748737
 2    -36.188131
@@ -155,51 +175,40 @@ seasonal_year
 Name: value, dtype: float64
 #+end_example
 
-#+begin_src python
+
+#+begin_src jupyter-python :file ./images/3-2-3-3.png :results output file
 # 季節成分を引き延ばす
 seasonal = pd.concat([seasonal_year] * (len(trend)//12))
 seasonal.index = air_passengers.index
 seasonal.plot()
 #+end_src
 
-#+begin_example
-<Axes: >
-#+end_example
-
-#+caption: png
-[[file:3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_files/3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_13_1.png]]
+#+RESULTS:
+[[./images/3-2-3-3.png]]
 
 **** 季節調整済み系列
 :PROPERTIES:
 :CUSTOM_ID: 季節調整済み系列
 :END:
-#+begin_src python
+#+begin_src jupyter-python :file ./images/3-2-3-4.png :results output file
 deseasonalized = air_passengers['value'] - seasonal
 deseasonalized.plot()
 #+end_src
 
-#+begin_example
-<Axes: >
-#+end_example
-
-#+caption: png
-[[file:3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_files/3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_15_1.png]]
+#+RESULTS:
+[[./images/3-2-3-4.png]]
 
 **** 不規則変動成分
 :PROPERTIES:
 :CUSTOM_ID: 不規則変動成分
 :END:
-#+begin_src python
+#+begin_src jupyter-python :file ./images/3-2-3-5.png :results output file
 resid = air_passengers['value'] - trend - seasonal
 resid.plot()
 #+end_src
 
-#+begin_example
-<Axes: >
-#+end_example
-
-#+caption: png
-[[file:3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_files/3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_17_1.png]]
+#+RESULTS:
+[[./images/3-2-3-5.png]]
 
 *** 加法型の季節調整の効率的な実装
 :PROPERTIES:
@@ -209,17 +218,20 @@ resid.plot()
 :PROPERTIES:
 :CUSTOM_ID: statsmodelsの利用
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # 加法型の季節分解
 seasonal_decomp = tsa.seasonal_decompose(
     air_passengers, model='additive')
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python
 # 参考：トレンド成分
 seasonal_decomp.trend.loc['1949']
 #+end_src
 
+#+RESULTS:
 #+begin_example
 1949-01-01           NaN
 1949-02-01           NaN
@@ -236,11 +248,13 @@ seasonal_decomp.trend.loc['1949']
 Freq: MS, Name: trend, dtype: float64
 #+end_example
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 参考：季節成分
 seasonal_decomp.seasonal.loc['1949']
 #+end_src
 
+#+RESULTS:
 #+begin_example
 1949-01-01   -24.748737
 1949-02-01   -36.188131
@@ -257,11 +271,13 @@ seasonal_decomp.seasonal.loc['1949']
 Freq: MS, Name: seasonal, dtype: float64
 #+end_example
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 参考：不規則変動
 seasonal_decomp.resid.loc['1949']
 #+end_src
 
+#+RESULTS:
 #+begin_example
 1949-01-01          NaN
 1949-02-01          NaN
@@ -278,45 +294,47 @@ seasonal_decomp.resid.loc['1949']
 Freq: MS, Name: resid, dtype: float64
 #+end_example
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 参考：推定結果の比較
 np.sum((seasonal_decomp.trend - trend) ** 2)
 #+end_src
 
-#+begin_example
-1.983133206853206e-25
-#+end_example
+#+RESULTS:
+: 1.5388467450327321e-25
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 参考：推定結果の比較
 np.sum((seasonal_decomp.seasonal - seasonal) ** 2)
 #+end_src
 
-#+begin_example
-1.4019636007587822e-26
-#+end_example
+#+RESULTS:
+: 2.1263745700232373e-26
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 参考：推定結果の比較
 np.sum((seasonal_decomp.resid - resid) ** 2)
 #+end_src
 
-#+begin_example
-1.991652904629593e-25
-#+end_example
+#+RESULTS:
+: 1.4904343512793187e-25
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 季節調整済み系列
 air_passengers['value'] - seasonal_decomp.seasonal
 #+end_src
 
+#+RESULTS:
 #+begin_example
 1949-01-01    136.748737
 1949-02-01    154.188131
 1949-03-01    134.241162
 1949-04-01    137.036616
 1949-05-01    125.506313
-                 ...    
+                 ...
 1960-08-01    543.176768
 1960-09-01    491.479798
 1960-10-01    481.642677
@@ -325,30 +343,29 @@ air_passengers['value'] - seasonal_decomp.seasonal
 Freq: MS, Length: 144, dtype: float64
 #+end_example
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 参考：推定結果の比較
 sum(((air_passengers['value'] - seasonal_decomp.seasonal) - deseasonalized) ** 2)
 #+end_src
 
-#+begin_example
-6.15942594796566e-26
-#+end_example
+#+RESULTS:
+: 7.51248017260074e-26
 
-#+begin_src python
+
+#+begin_src jupyter-python :file ./images/3-2-4-1.png :results output file
 # 参考：推定結果の可視化
-rcParams['figure.figsize'] = 8, 8
 _ = seasonal_decomp.plot()
-rcParams['figure.figsize'] = 8, 4
 #+end_src
 
-#+caption: png
-[[file:3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_files/3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_29_0.png]]
+#+RESULTS:
+[[./images/3-2-4-1.png]]
 
 **** sktimeの利用
 :PROPERTIES:
 :CUSTOM_ID: sktimeの利用
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # 加法型の季節調整
 transformer = Deseasonalizer(sp=12, model='additive')  
 
@@ -356,14 +373,37 @@ transformer = Deseasonalizer(sp=12, model='additive')
 desea_sk = transformer.fit_transform(air_passengers.to_period())  
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python
+print(desea_sk)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+              value
+1949-01  136.748737
+1949-02  154.188131
+1949-03  134.241162
+1949-04  137.036616
+1949-05  125.506313
+...             ...
+1960-08  543.176768
+1960-09  491.479798
+1960-10  481.642677
+1960-11  443.593434
+1960-12  460.619949
+
+[144 rows x 1 columns]
+#+end_example
+
+#+begin_src jupyter-python
 # 推定結果の比較
 sum((desea_sk['value'] - deseasonalized.to_period()) ** 2)
 #+end_src
 
-#+begin_example
-6.15942594796566e-26
-#+end_example
+#+RESULTS:
+: 5.351632381019344e-26
 
 *** 移動平均法による乗法型の季節調整
 :PROPERTIES:
@@ -373,16 +413,18 @@ sum((desea_sk['value'] - deseasonalized.to_period()) ** 2)
 :PROPERTIES:
 :CUSTOM_ID: トレンド除去-1
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # トレンドを除去した結果
 detrend_mul = air_passengers['value'] / trend
 #+end_src
+
+#+RESULTS:
 
 **** 季節成分
 :PROPERTIES:
 :CUSTOM_ID: 季節成分-1
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # トレンド排除後の結果を月ごとに平均する
 seasonal_year_mul = detrend_mul.groupby(detrend_mul.index.month).mean()
 
@@ -392,6 +434,7 @@ seasonal_year_mul = seasonal_year_mul / np.mean(seasonal_year_mul)
 seasonal_year_mul
 #+end_src
 
+#+RESULTS:
 #+begin_example
 1     0.910230
 2     0.883625
@@ -408,43 +451,37 @@ seasonal_year_mul
 Name: value, dtype: float64
 #+end_example
 
-#+begin_src python
+#+begin_src jupyter-python
 # 季節成分を引き延ばす
 seasonal_mul = pd.concat([seasonal_year_mul] * (len(trend)//12))
 seasonal_mul.index = air_passengers.index
 #+end_src
 
+#+RESULTS:
+
 **** 季節調整済み系列
 :PROPERTIES:
 :CUSTOM_ID: 季節調整済み系列-1
 :END:
-#+begin_src python
+#+begin_src jupyter-python :file ./images/3-2-5-3.png :results output file
 deseasonalized_mul = air_passengers['value'] / seasonal_mul
 deseasonalized_mul.plot()
 #+end_src
 
-#+begin_example
-<Axes: >
-#+end_example
-
-#+caption: png
-[[file:3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_files/3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_40_1.png]]
+#+RESULTS:
+[[./images/3-2-5-3.png]]
 
 **** 不規則変動成分
 :PROPERTIES:
 :CUSTOM_ID: 不規則変動成分-1
 :END:
-#+begin_src python
+#+begin_src jupyter-python :file ./images/3-2-5-4.png :results output file
 resid_mul = air_passengers['value'] / trend / seasonal_mul
 resid_mul.plot()
 #+end_src
 
-#+begin_example
-<Axes: >
-#+end_example
-
-#+caption: png
-[[file:3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_files/3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_42_1.png]]
+#+RESULTS:
+[[./images/3-2-5-4.png]]
 
 *** 乗法型の季節調整の効率的な実装
 :PROPERTIES:
@@ -454,17 +491,20 @@ resid_mul.plot()
 :PROPERTIES:
 :CUSTOM_ID: statsmodelsの利用-1
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # 乗法型の季節分解
 seasonal_decomp_mul = tsa.seasonal_decompose(
     air_passengers, model='multiplicative')
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python
 # 参考：季節成分
 seasonal_decomp_mul.seasonal.loc['1949']
 #+end_src
 
+#+RESULTS:
 #+begin_example
 1949-01-01    0.910230
 1949-02-01    0.883625
@@ -481,11 +521,13 @@ seasonal_decomp_mul.seasonal.loc['1949']
 Freq: MS, Name: seasonal, dtype: float64
 #+end_example
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 参考：不規則変動成分
 seasonal_decomp_mul.resid.loc['1949']
 #+end_src
 
+#+RESULTS:
 #+begin_example
 1949-01-01         NaN
 1949-02-01         NaN
@@ -502,45 +544,47 @@ seasonal_decomp_mul.resid.loc['1949']
 Freq: MS, Name: resid, dtype: float64
 #+end_example
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 参考：推定結果の比較
 np.sum((seasonal_decomp_mul.trend - trend) ** 2)
 #+end_src
 
-#+begin_example
-1.983133206853206e-25
-#+end_example
+#+RESULTS:
+: 1.5388467450327321e-25
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 参考：推定結果の比較
 np.sum((seasonal_decomp_mul.seasonal - seasonal_mul) ** 2)
 #+end_src
 
-#+begin_example
-5.17689969051289e-30
-#+end_example
+#+RESULTS:
+: 3.4019626537656134e-30
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 参考：推定結果の比較
 np.sum((seasonal_decomp_mul.resid - resid_mul) ** 2)
 #+end_src
 
-#+begin_example
-9.799131557042256e-30
-#+end_example
+#+RESULTS:
+: 5.1522477872247334e-30
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 季節調整済み系列
 air_passengers['value'] / seasonal_decomp_mul.seasonal
 #+end_src
 
+#+RESULTS:
 #+begin_example
 1949-01-01    123.045774
 1949-02-01    133.540764
 1949-03-01    131.034760
 1949-04-01    132.184860
 1949-05-01    123.296015
-                 ...    
+                 ...
 1960-08-01    496.757563
 1960-09-01    479.022974
 1960-10-01    500.131683
@@ -549,20 +593,20 @@ air_passengers['value'] / seasonal_decomp_mul.seasonal
 Freq: MS, Length: 144, dtype: float64
 #+end_example
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 参考：推定結果の比較
 sum(((air_passengers['value'] / seasonal_decomp_mul.seasonal) - deseasonalized_mul) ** 2)
 #+end_src
 
-#+begin_example
-5.54550283708646e-25
-#+end_example
+#+RESULTS:
+: 3.562369630233254e-25
 
 **** sktimeの利用
 :PROPERTIES:
 :CUSTOM_ID: sktimeの利用-1
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # 乗法型の季節調整
 transformer_mul = Deseasonalizer(sp=12, model='multiplicative')  
 
@@ -570,14 +614,16 @@ transformer_mul = Deseasonalizer(sp=12, model='multiplicative')
 desea_sk_mul = transformer_mul.fit_transform(air_passengers.to_period())  
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python
 # 推定結果の比較
 sum((desea_sk_mul['value'] - deseasonalized_mul.to_period()) ** 2)
 #+end_src
 
-#+begin_example
-5.54550283708646e-25
-#+end_example
+#+RESULTS:
+: 6.8783622225478815e-25
+
 
 *** 線形回帰分析によるトレンド除去
 :PROPERTIES:
@@ -587,74 +633,85 @@ sum((desea_sk_mul['value'] - deseasonalized_mul.to_period()) ** 2)
 :PROPERTIES:
 :CUSTOM_ID: 説明変数を作る
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # 説明変数を作る
 trend_generator = TimeTrend(constant=True, order=1)
 exog = trend_generator.in_sample(air_passengers.index)
 print(exog.head(3))
 #+end_src
 
-#+begin_example
-            const  trend
-1949-01-01    1.0    1.0
-1949-02-01    1.0    2.0
-1949-03-01    1.0    3.0
-#+end_example
+#+RESULTS:
+:             const  trend
+: 1949-01-01    1.0    1.0
+: 1949-02-01    1.0    2.0
+: 1949-03-01    1.0    3.0
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 参考：将来予測のための説明変数を作ることもできる
 print(trend_generator.out_of_sample(3, air_passengers.index))
 #+end_src
 
-#+begin_example
-            const  trend
-1961-01-01    1.0  145.0
-1961-02-01    1.0  146.0
-1961-03-01    1.0  147.0
-#+end_example
+#+RESULTS:
+:             const  trend
+: 1961-01-01    1.0  145.0
+: 1961-02-01    1.0  146.0
+: 1961-03-01    1.0  147.0
+
 
 **** 加法型のトレンド除去
 :PROPERTIES:
 :CUSTOM_ID: 加法型のトレンド除去
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # 線形回帰モデルの推定
 lm_model = sm.OLS(air_passengers, exog).fit()
+lm_model.fittedvalues
+#+end_src
 
+#+RESULTS:
+#+begin_example
+1949-01-01     90.309962
+1949-02-01     92.967146
+1949-03-01     95.624330
+1949-04-01     98.281513
+1949-05-01    100.938697
+                 ...
+1960-08-01    459.658525
+1960-09-01    462.315709
+1960-10-01    464.972893
+1960-11-01    467.630077
+1960-12-01    470.287261
+Freq: MS, Length: 144, dtype: float64
+#+end_example
+
+#+begin_src jupyter-python :file ./images/3-2-7-2.png :results output file
 # 加法型のトレンド除去
 detrend_ols = air_passengers['value'] - lm_model.fittedvalues
 detrend_ols.plot()
 #+end_src
 
-#+begin_example
-<Axes: >
-#+end_example
-
-#+caption: png
-[[file:3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_files/3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_61_1.png]]
+#+RESULTS:
+[[./images/3-2-7-2.png]]
 
 **** 乗法型のトレンド除去
 :PROPERTIES:
 :CUSTOM_ID: 乗法型のトレンド除去
 :END:
-#+begin_src python
+#+begin_src jupyter-python :file ./images/3-2-7-3.png :results output file
 # 乗法型のトレンド除去
 detrend_ols_mul = air_passengers['value'] / lm_model.fittedvalues
 detrend_ols_mul.plot()
 #+end_src
 
-#+begin_example
-<Axes: >
-#+end_example
-
-#+caption: png
-[[file:3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_files/3-2-%E5%AD%A3%E7%AF%80%E8%AA%BF%E6%95%B4%E3%81%A8%E3%83%88%E3%83%AC%E3%83%B3%E3%83%89%E9%99%A4%E5%8E%BB_63_1.png]]
+#+RESULTS:
+[[./images/3-2-7-3.png]]
 
 **** sktimeを用いた効率的な実装
 :PROPERTIES:
 :CUSTOM_ID: sktimeを用いた効率的な実装
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # 加法型のトレンド除去
 transformer_trend = Detrender(
     forecaster=PolynomialTrendForecaster(degree=1), model='additive')
@@ -664,7 +721,9 @@ detrend_ols_sk = transformer_trend.fit_transform(
     air_passengers.to_period())
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python
 # 乗法型のトレンド除去
 transformer_trend_mul = Detrender(
     forecaster=PolynomialTrendForecaster(degree=1), model='multiplicative')
@@ -674,23 +733,25 @@ detrend_ols_sk_mul = transformer_trend_mul.fit_transform(
     air_passengers.to_period())
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python
 # 参考：推定結果の比較
 sum((detrend_ols.to_period() - detrend_ols_sk['value']) ** 2)
 #+end_src
 
-#+begin_example
-6.2822105701415e-24
-#+end_example
+#+RESULTS:
+: 1.4336316329379745e-24
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # 参考：推定結果の比較
 sum((detrend_ols_mul.to_period() - detrend_ols_sk_mul['value']) ** 2)
 #+end_src
 
-#+begin_example
-3.1238891846752067e-28
-#+end_example
+#+RESULTS:
+: 1.654142710635309e-29
+
 
 *** 差分による季節調整とトレンド除去
 :PROPERTIES:
@@ -700,7 +761,7 @@ sum((detrend_ols_mul.to_period() - detrend_ols_sk_mul['value']) ** 2)
 :PROPERTIES:
 :CUSTOM_ID: 季節差分による季節調整
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # 季節差分による季節調整
 transformer_diff_12 = Differencer(lags=12)
 
@@ -712,7 +773,7 @@ desea_diff = transformer_diff_12.fit_transform(air_passengers.to_period())
 :PROPERTIES:
 :CUSTOM_ID: 差分によるトレンド除去
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # 差分によるトレンド除去
 transformer_diff_1 = Differencer(lags=1)
 
