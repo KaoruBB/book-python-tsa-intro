@@ -1,2 +1,3 @@
 /py_tsa_venv/
 /.python-version
+/.dir-locals.el
