@@ -7,8 +7,6 @@
 
 # 環境構築
 
-    ls
-
 pythonのインストール
 
     pyenv install 3.12

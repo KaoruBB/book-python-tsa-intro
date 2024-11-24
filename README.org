@@ -4,17 +4,6 @@
 * Introduction
  馬場 真哉 著 『Pythonではじめる時系列分析入門』のサンプルコードをorg-modeで実行するためのforkです。
 * 環境構築
-
-#+begin_src sh
-ls
-#+end_src
-
-#+RESULTS:
-| README.md      |
-| README.org     |
-| book-data      |
-| 環境構築用資料 |
-
 pythonのインストール
 #+begin_src sh
 pyenv install 3.12
