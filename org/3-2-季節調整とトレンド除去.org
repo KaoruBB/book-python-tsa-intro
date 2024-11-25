@@ -10,7 +10,6 @@
 *** 分析の準備
 :PROPERTIES:
 :CUSTOM_ID: 分析の準備
-:header-args:jupyter-python: :session tsa :kernel py_tsa :async yes :tangle yes :exports both
 :END:
 #+begin_src jupyter-python
 # 数値計算に使うライブラリ
@@ -65,7 +64,7 @@ air_passengers = air_passengers.drop(air_passengers.columns[0], axis=1)
 
 #+RESULTS:
 
-#+begin_src jupyter-python
+#+begin_src jupyter-python :exports both
 print(air_passengers)
 #+end_src
 
