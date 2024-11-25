@@ -1,7 +1,7 @@
 * 第3部　基本的な時系列予測の手法
 :PROPERTIES:
 :CUSTOM_ID: 第3部-基本的な時系列予測の手法
-:header-args:jupyter-python: :session tsa :kernel py_tsa :async yes :tangle yes :exports both
+:header-args:jupyter-python: :exports both :session tsa :kernel py_tsa :async yes :tangle yes
 :END:
 ** 第2章　季節調整とトレンド除去
 :PROPERTIES:
@@ -135,7 +135,7 @@ trend.plot()
 :PROPERTIES:
 :CUSTOM_ID: トレンド除去
 :END:
-#+begin_src jupyter-python  :file ./images/3-2-3-2.png :results output file
+#+begin_src jupyter-python  :file ./images/3-2-3-2.png :results output file :exports both
 # トレンドを排除した結果
 detrend = air_passengers['value'] - trend
 detrend.plot()
