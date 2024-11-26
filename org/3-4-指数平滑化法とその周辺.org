@@ -1,12 +1,13 @@
 * 第3部　基本的な時系列予測の手法
 :PROPERTIES:
 :CUSTOM_ID: 第3部-基本的な時系列予測の手法
+:header-args:jupyter-python: :exports both :session tsa :kernel py_tsa :async yes :tangle yes
 :END:
 ** 第4章　指数平滑化法とその周辺
 :PROPERTIES:
 :CUSTOM_ID: 第4章-指数平滑化法とその周辺
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # 数値計算に使うライブラリ
 import numpy as np
 import pandas as pd
@@ -53,16 +54,20 @@ from sktime.forecasting.compose import (
 from sktime.transformations.compose import OptionalPassthrough
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python
 # 表示設定
 np.set_printoptions(linewidth=60)
-pd.set_option('display.width', 80)
+pd.set_option('display.width', 800)
 
 from matplotlib.pylab import rcParams
 rcParams['figure.figsize'] = 8, 4
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python
 # 飛行機乗客数データの読み込み
 air_passengers = sm.datasets.get_rdataset('AirPassengers').data
 
@@ -75,7 +80,9 @@ air_passengers.index = date_index
 air_passengers = air_passengers.drop(air_passengers.columns[0], axis=1)
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python
 # データの分割
 train, test = temporal_train_test_split(air_passengers, test_size=36)
 
@@ -83,23 +90,25 @@ train, test = temporal_train_test_split(air_passengers, test_size=36)
 fh = np.arange(1, len(test) + 1)
 #+end_src
 
+#+RESULTS:
+
 *** 単純指数平滑化法
 :PROPERTIES:
 :CUSTOM_ID: 単純指数平滑化法
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 data = pd.Series([1, 2, 3])
 data
 #+end_src
 
-#+begin_example
-0    1
-1    2
-2    3
-dtype: int64
-#+end_example
+#+RESULTS:
+: 0    1
+: 1    2
+: 2    3
+: dtype: int64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 平滑化定数
 alpha = 0.8
 
@@ -108,21 +117,21 @@ alpha_list = np.tile(1 - alpha, len(data))
 alpha_list
 #+end_src
 
-#+begin_example
-array([0.2, 0.2, 0.2])
-#+end_example
+#+RESULTS:
+: array([0.2, 0.2, 0.2])
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # データにかける重み
 weight = alpha_list ** np.arange(0, len(data)) * alpha
 weight
 #+end_src
 
-#+begin_example
-array([0.8  , 0.16 , 0.032])
-#+end_example
+#+RESULTS:
+: array([0.8  , 0.16 , 0.032])
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 逆順にする
 weight = weight[::-1]
 
@@ -130,11 +139,11 @@ weight = weight[::-1]
 print(f'4時点目の予測値 {np.sum(data * weight):.4g} ')
 #+end_src
 
-#+begin_example
-4時点目の予測値 2.752 
-#+end_example
+#+RESULTS:
+: 4時点目の予測値 2.752
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # データの並び順の変更
 data_2 = pd.Series([3, 2, 1])
 
@@ -142,18 +151,17 @@ data_2 = pd.Series([3, 2, 1])
 print(f'4時点目の予測値 {np.sum(data_2 * weight):.4g} ')
 #+end_src
 
-#+begin_example
-4時点目の予測値 1.216 
-#+end_example
+#+RESULTS:
+: 4時点目の予測値 1.216
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 参考：単なるデータの平均
 np.mean(data)
 #+end_src
 
-#+begin_example
-2.0
-#+end_example
+#+RESULTS:
+: 2.0
 
 *** 単純指数平滑化法の再帰的表現
 :PROPERTIES:
@@ -163,7 +171,7 @@ np.mean(data)
 :PROPERTIES:
 :CUSTOM_ID: 初期値を0にした場合の単純指数平滑化法
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 初期値
 yhat1 = 0
 
@@ -176,15 +184,14 @@ yhat4 = alpha * data[2] + (1 - alpha) * yhat3
 print(f'2時点目 {yhat2:.4g} | 3時点目 {yhat3:.4g} | 4時点目 {yhat4:.4g}')
 #+end_src
 
-#+begin_example
-2時点目 0.8 | 3時点目 1.76 | 4時点目 2.752
-#+end_example
+#+RESULTS:
+: 2時点目 0.8 | 3時点目 1.76 | 4時点目 2.752
 
 **** 初期データを初期値にした場合の単純指数平滑化法
 :PROPERTIES:
 :CUSTOM_ID: 初期データを初期値にした場合の単純指数平滑化法
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 初期値
 yhat1 = data[0]
 
@@ -197,9 +204,8 @@ yhat4 = alpha * data[2] + (1 - alpha) * yhat3
 print(f'2時点目 {yhat2:.4g} | 3時点目 {yhat3:.4g} | 4時点目 {yhat4:.4g}')
 #+end_src
 
-#+begin_example
-2時点目 1 | 3時点目 1.8 | 4時点目 2.76
-#+end_example
+#+RESULTS:
+: 2時点目 1 | 3時点目 1.8 | 4時点目 2.76
 
 *** 単純指数平滑化法の効率的な実装
 :PROPERTIES:
@@ -209,24 +215,44 @@ print(f'2時点目 {yhat2:.4g} | 3時点目 {yhat3:.4g} | 4時点目 {yhat4:.4g}
 :PROPERTIES:
 :CUSTOM_ID: pandasの利用
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 単純指数平滑化法の実施
+%time
 ewma_pd = data.ewm(alpha = 0.8, adjust=False)
 ewma_pd.mean()
 #+end_src
 
-#+begin_example
-0    1.00
-1    1.80
-2    2.76
-dtype: float64
-#+end_example
+#+RESULTS:
+:RESULTS:
+: CPU times: user 3 μs, sys: 0 ns, total: 3 μs
+: Wall time: 6.2 μs
+: 0    1.00
+: 1    1.80
+: 2    2.76
+: dtype: float64
+:END:
+
+再帰的な計算がされない場合
+#+begin_src jupyter-python :exports both
+%time
+data.ewm(alpha = 0.8, adjust=True).mean()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: CPU times: user 4 μs, sys: 1 μs, total: 5 μs
+: Wall time: 6.91 μs
+: 0    1.000000
+: 1    1.833333
+: 2    2.774194
+: dtype: float64
+:END:
 
 **** statsmodelsの利用
 :PROPERTIES:
 :CUSTOM_ID: statsmodelsの利用
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 初期値0の場合
 ewma_sm = tsa.SimpleExpSmoothing(
     data, initialization_method='known', initial_level=0
@@ -236,24 +262,25 @@ ewma_sm = tsa.SimpleExpSmoothing(
 ewma_sm.fittedvalues
 #+end_src
 
-#+begin_example
-0    0.00
-1    0.80
-2    1.76
-dtype: float64
-#+end_example
+#+RESULTS:
+: 0    0.00
+: 1    0.80
+: 2    1.76
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 予測値
-ewma_sm.forecast(1)
+ewma_sm.forecast(2)
 #+end_src
 
-#+begin_example
-3    2.752
-dtype: float64
-#+end_example
+#+RESULTS:
+: 3    2.752
+: 4    2.752
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 初期データを初期値にした場合
 ewma_sm_lh = tsa.SimpleExpSmoothing(
     data, initialization_method='legacy-heuristic'
@@ -263,28 +290,29 @@ ewma_sm_lh = tsa.SimpleExpSmoothing(
 ewma_sm_lh.fittedvalues
 #+end_src
 
-#+begin_example
-0    1.0
-1    1.0
-2    1.8
-dtype: float64
-#+end_example
+#+RESULTS:
+: 0    1.0
+: 1    1.0
+: 2    1.8
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 予測値
-ewma_sm_lh.forecast(1)
+ewma_sm_lh.forecast(3)
 #+end_src
 
-#+begin_example
-3    2.76
-dtype: float64
-#+end_example
+#+RESULTS:
+: 3    2.76
+: 4    2.76
+: 5    2.76
+: dtype: float64
 
 **** パラメータの推定
 :PROPERTIES:
 :CUSTOM_ID: パラメータの推定
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 初期データと平滑化定数を推定した場合
 ewma_best = tsa.SimpleExpSmoothing(
     data, initialization_method='estimated').fit()
@@ -293,39 +321,30 @@ ewma_best = tsa.SimpleExpSmoothing(
 ewma_best.fittedvalues
 #+end_src
 
-#+begin_example
-0    1.0
-1    1.0
-2    2.0
-dtype: float64
-#+end_example
+#+RESULTS:
+: 0    1.0
+: 1    1.0
+: 2    2.0
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 予測値
-ewma_best.forecast(1)
+ewma_best.forecast(2)
 #+end_src
 
-#+begin_example
-3    3.0
-dtype: float64
-#+end_example
+#+RESULTS:
+: 3    3.0
+: 4    3.0
+: dtype: float64
 
-#+begin_src python
-ewma_best.params
+
+#+begin_src jupyter-python :exports both
+print(ewma_best.params)
 #+end_src
 
-#+begin_example
-{'smoothing_level': 0.9999999850988388,
- 'smoothing_trend': nan,
- 'smoothing_seasonal': nan,
- 'damping_trend': nan,
- 'initial_level': 1.0000000252217502,
- 'initial_trend': nan,
- 'initial_seasons': array([], dtype=float64),
- 'use_boxcox': False,
- 'lamda': None,
- 'remove_bias': False}
-#+end_example
+#+RESULTS:
+: {'smoothing_level': 0.9999999850988388, 'smoothing_trend': nan, 'smoothing_seasonal': nan, 'damping_trend': nan, 'initial_level': 1.0000000252217502, 'initial_trend': nan, 'initial_seasons': array([], dtype=float64), 'use_boxcox': False, 'lamda': None, 'remove_bias': False}
 
 *** Holt法
 :PROPERTIES:
@@ -335,7 +354,7 @@ ewma_best.params
 :PROPERTIES:
 :CUSTOM_ID: holt法の実装
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 平滑化定数
 alpha = 0.8
 beta = 0.5
@@ -364,113 +383,103 @@ print(f'level：1時点目 {l1:.3g} | 2時点目 {l2:.3g} | 3時点目 {l3:.4g}'
 print(f'trend：1時点目 {d1:.3g} | 2時点目 {d2:.3g} | 3時点目 {d3:.4g}')
 #+end_src
 
-#+begin_example
-yhat：2時点目 1.2 | 3時点目 2.56 | 4時点目 3.808
-level：1時点目 0.8 | 2時点目 1.84 | 3時点目 2.912
-trend：1時点目 0.4 | 2時点目 0.72 | 3時点目 0.896
-#+end_example
+#+RESULTS:
+: yhat：2時点目 1.2 | 3時点目 2.56 | 4時点目 3.808
+: level：1時点目 0.8 | 2時点目 1.84 | 3時点目 2.912
+: trend：1時点目 0.4 | 2時点目 0.72 | 3時点目 0.896
 
 **** statsmodelsの利用
 :PROPERTIES:
 :CUSTOM_ID: statsmodelsの利用-1
 :END:
-#+begin_src python
+#+begin_src jupyter-python
 # holt法の実装：パラメータ固定の場合
 holt = tsa.Holt(
     data, initialization_method='known', initial_level=0, initial_trend=0
 ).fit(smoothing_level=0.8, smoothing_trend=0.5, optimized=False)
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 参考：当てはめ値
 holt.fittedvalues
 #+end_src
 
-#+begin_example
-0    0.00
-1    1.20
-2    2.56
-dtype: float64
-#+end_example
+#+RESULTS:
+: 0    0.00
+: 1    1.20
+: 2    2.56
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 参考：水準成分
 holt.level
 #+end_src
 
-#+begin_example
-0    0.800
-1    1.840
-2    2.912
-dtype: float64
-#+end_example
+#+RESULTS:
+: 0    0.800
+: 1    1.840
+: 2    2.912
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 参考：ドリフト成分
 holt.trend
 #+end_src
 
-#+begin_example
-0    0.400
-1    0.720
-2    0.896
-dtype: float64
-#+end_example
+#+RESULTS:
+: 0    0.400
+: 1    0.720
+: 2    0.896
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 参考：予測値
 holt.forecast(1)
 #+end_src
 
-#+begin_example
-3    3.808
-dtype: float64
-#+end_example
+#+RESULTS:
+: 3    3.808
+: dtype: float64
 
 **** パラメータの推定
 :PROPERTIES:
 :CUSTOM_ID: パラメータの推定-1
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # holt法の実装：パラメータを推定した場合
 holt_best = tsa.Holt(data, initialization_method='estimated').fit()
-holt_best.params
+print(holt_best.params)
 #+end_src
 
-#+begin_example
-{'smoothing_level': 0.9999999850988388,
- 'smoothing_trend': 2.7105053908240827e-17,
- 'smoothing_seasonal': nan,
- 'damping_trend': nan,
- 'initial_level': -7.607667228101689e-05,
- 'initial_trend': 1.00011499468019,
- 'initial_seasons': array([], dtype=float64),
- 'use_boxcox': False,
- 'lamda': None,
- 'remove_bias': False}
-#+end_example
+#+RESULTS:
+: {'smoothing_level': 0.9999999850988388, 'smoothing_trend': 2.7105053908240827e-17, 'smoothing_seasonal': nan, 'damping_trend': nan, 'initial_level': -7.607667228101689e-05, 'initial_trend': 1.00011499468019, 'initial_seasons': array([], dtype=float64), 'use_boxcox': False, 'lamda': None, 'remove_bias': False}
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 参考：当てはめ値
 holt_best.fittedvalues
 #+end_src
 
-#+begin_example
-0    1.000039
-1    2.000115
-2    3.000115
-dtype: float64
-#+end_example
+#+RESULTS:
+: 0    1.000039
+: 1    2.000115
+: 2    3.000115
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 予測値
 holt_best.forecast(1)
 #+end_src
 
-#+begin_example
-3    4.000115
-dtype: float64
-#+end_example
+#+RESULTS:
+: 3    4.000115
+: dtype: float64
 
 *** damped trendの利用
 :PROPERTIES:
@@ -480,23 +489,22 @@ dtype: float64
 :PROPERTIES:
 :CUSTOM_ID: 減衰しないトレンドを用いた予測
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 増減量は一定
 holt.forecast(3).diff()
 #+end_src
 
-#+begin_example
-3      NaN
-4    0.896
-5    0.896
-dtype: float64
-#+end_example
+#+RESULTS:
+: 3      NaN
+: 4    0.896
+: 5    0.896
+: dtype: float64
 
 **** damped trendを想定した予測
 :PROPERTIES:
 :CUSTOM_ID: damped-trendを想定した予測
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # トレンドの減衰率のパラメータ
 phi = 0.9
 
@@ -522,13 +530,13 @@ print(f'level：1時点目 {l1:.3g} | 2時点目 {l2:.3g} | 3時点目 {l3:.4g}'
 print(f'trend：1時点目 {d1:.3g} | 2時点目 {d2:.3g} | 3時点目 {d3:.4g}')
 #+end_src
 
-#+begin_example
-yhat：2時点目 1.16 | 3時点目 2.458 | 4時点目 3.65
-level：1時点目 0.8 | 2時点目 1.83 | 3時点目 2.892
-trend：1時点目 0.4 | 2時点目 0.696 | 3時点目 0.843
-#+end_example
+#+RESULTS:
+: yhat：2時点目 1.16 | 3時点目 2.458 | 4時点目 3.65
+: level：1時点目 0.8 | 2時点目 1.83 | 3時点目 2.892
+: trend：1時点目 0.4 | 2時点目 0.696 | 3時点目 0.843
 
-#+begin_src python
+
+#+begin_src jupyter-python
 # damped trendを利用した場合
 holt_damped = tsa.Holt(
     data, initialization_method='known', initial_level=0, 
@@ -537,51 +545,52 @@ holt_damped = tsa.Holt(
       optimized=False)
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 参考：当てはめ値
 holt_damped.fittedvalues
 #+end_src
 
-#+begin_example
-0    0.0000
-1    1.1600
-2    2.4584
-dtype: float64
-#+end_example
+#+RESULTS:
+: 0    0.0000
+: 1    1.1600
+: 2    2.4584
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 参考：予測値
 holt_damped.forecast(3)
 #+end_src
 
-#+begin_example
-3    3.650416
-4    4.333278
-5    4.947855
-dtype: float64
-#+end_example
+#+RESULTS:
+: 3    3.650416
+: 4    4.333278
+: 5    4.947855
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 増減量が変わる
 holt_damped.forecast(3).diff()
 #+end_src
 
-#+begin_example
-3         NaN
-4    0.682862
-5    0.614576
-dtype: float64
-#+end_example
+#+RESULTS:
+: 3         NaN
+: 4    0.682862
+: 5    0.614576
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 print(f'2時点先予測の増減量： {d3 * phi ** 2:.6g}')
 print(f'3時点先予測の増減量： {d3 * phi ** 3:.6g}')
 #+end_src
 
-#+begin_example
-2時点先予測の増減量： 0.682862
-3時点先予測の増減量： 0.614576
-#+end_example
+#+RESULTS:
+: 2時点先予測の増減量： 0.682862
+: 3時点先予測の増減量： 0.614576
 
 *** Holt-winters法
 :PROPERTIES:
@@ -591,7 +600,7 @@ print(f'3時点先予測の増減量： {d3 * phi ** 3:.6g}')
 :PROPERTIES:
 :CUSTOM_ID: holt-winters法の実装
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 平滑化定数
 alpha = 0.8
 beta = 0.5
@@ -638,7 +647,7 @@ season：1時点目 0.6 | 2時点目 0.48 | 3時点目 0.504
 :PROPERTIES:
 :CUSTOM_ID: statsmodelsの利用-2
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # Holt-Winters法の実装
 hw = tsa.ExponentialSmoothing(
     data, trend='add', seasonal='add', initialization_method='known', 
@@ -648,69 +657,71 @@ hw = tsa.ExponentialSmoothing(
       optimized=False)
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 当てはめ値
 hw.fittedvalues
 #+end_src
 
-#+begin_example
-0    0.00
-1    1.20
-2    3.16
-dtype: float64
-#+end_example
+#+RESULTS:
+: 0    0.00
+: 1    1.20
+: 2    3.16
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 予測値
 hw.forecast(1)
 #+end_src
 
-#+begin_example
-3    3.568
-dtype: float64
-#+end_example
+#+RESULTS:
+: 3    3.568
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 参考：水準成分
 hw.level
 #+end_src
 
-#+begin_example
-0    0.800
-1    1.840
-2    2.432
-dtype: float64
-#+end_example
+#+RESULTS:
+: 0    0.800
+: 1    1.840
+: 2    2.432
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 参考：トレンド成分
 hw.trend
 #+end_src
 
-#+begin_example
-0    0.400
-1    0.720
-2    0.656
-dtype: float64
-#+end_example
+#+RESULTS:
+: 0    0.400
+: 1    0.720
+: 2    0.656
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 参考：季節成分
 hw.season
 #+end_src
 
-#+begin_example
-0    0.600
-1    0.480
-2    0.504
-dtype: float64
-#+end_example
+#+RESULTS:
+: 0    0.600
+: 1    0.480
+: 2    0.504
+: dtype: float64
+
 
 **** 飛行機乗客数データへの適用
 :PROPERTIES:
 :CUSTOM_ID: 飛行機乗客数データへの適用
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # モデル化
 hw_air = tsa.ExponentialSmoothing(
     train, trend='add', seasonal='add', seasonal_periods=12).fit()
@@ -722,11 +733,11 @@ pred = hw_air.forecast(len(test))
 mean_absolute_error(test, pred)
 #+end_src
 
-#+begin_example
-21.544775457219366
-#+end_example
+#+RESULTS:
+: 21.544798267874626
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both :file ./images/3-4-8-4.png :results output file
 # 予測結果と季節調整済み系列の可視化
 fig, ax = plot_series(train, hw_air.level, test, pred, 
                       labels=['train', 'level', 'test', 'pred'], 
@@ -734,14 +745,14 @@ fig, ax = plot_series(train, hw_air.level, test, pred,
 fig.set_size_inches(8, 4)
 #+end_src
 
-#+caption: png
-[[file:3-4-%E6%8C%87%E6%95%B0%E5%B9%B3%E6%BB%91%E5%8C%96%E6%B3%95%E3%81%A8%E3%81%9D%E3%81%AE%E5%91%A8%E8%BE%BA_files/3-4-%E6%8C%87%E6%95%B0%E5%B9%B3%E6%BB%91%E5%8C%96%E6%B3%95%E3%81%A8%E3%81%9D%E3%81%AE%E5%91%A8%E8%BE%BA_64_0.png]]
+#+RESULTS:
+[[file:./images/3-4-8-4.png]]
 
 **** 乗法型のHolt-Winters法
 :PROPERTIES:
 :CUSTOM_ID: 乗法型のholt-winters法
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 乗法型としてモデル化
 hw_air_mul = tsa.ExponentialSmoothing(
     train, trend='add', seasonal='mul', seasonal_periods=12).fit()
@@ -753,9 +764,8 @@ pred_mul = hw_air_mul.forecast(len(test))
 mean_absolute_error(test, pred_mul)
 #+end_src
 
-#+begin_example
-22.318015069498156
-#+end_example
+#+RESULTS:
+: 22.318022623449856
 
 *** sktimeによる実践的な指数平滑化法
 :PROPERTIES:
@@ -765,7 +775,7 @@ mean_absolute_error(test, pred_mul)
 :PROPERTIES:
 :CUSTOM_ID: sktimeの利用
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 予測手法の指定
 hw_forecaster = ExponentialSmoothing(trend='add', seasonal='add')
 
@@ -776,20 +786,21 @@ hw_forecaster.fit(train)
 hw_fore_sk = hw_forecaster.predict(fh)
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 参考：statsmodelと同じ結果になる
 np.sum((hw_fore_sk.value - pred) ** 2)
 #+end_src
 
-#+begin_example
-0.0
-#+end_example
+#+RESULTS:
+: 0.0
 
 **** 精度の高い手法の探索
 :PROPERTIES:
 :CUSTOM_ID: 精度の高い手法の探索
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 前処理から予測の選択までを1つのパイプラインにまとめる
 pipe = TransformedTargetForecaster(
     steps=[
@@ -827,19 +838,21 @@ cv_pipe_forecaster = ForecastingGridSearchCV(
 )
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # データへの当てはめ
 cv_pipe_forecaster.fit(train)
 
 # CVで判断された最良の予測手法
-cv_pipe_forecaster.best_params_
+print(cv_pipe_forecaster.best_params_)
 #+end_src
 
-#+begin_example
-{'forecaster__selected_forecaster': 'add', 'log__passthrough': False}
-#+end_example
+#+RESULTS:
+: {'forecaster__selected_forecaster': 'add', 'log__passthrough': False}
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 参考：全ての方式のCVの結果一覧
 
 # CVの結果のうち、必要な列だけをコピーする
@@ -853,19 +866,19 @@ result_df['params'] = result_df['params'].apply(lambda x: list(x.values()))
 print(result_df)
 #+end_src
 
-#+begin_example
-   mean_test_MeanAbsoluteError               params
-0                    15.946600          [add, True]
-1                     9.778336         [add, False]
-2                    16.988803   [add_damped, True]
-3                    11.627914  [add_damped, False]
-4                    11.289958          [mul, True]
-5                    10.083780         [mul, False]
-6                    13.031329   [mul_damped, True]
-7                    11.001232  [mul_damped, False]
-#+end_example
+#+RESULTS:
+:    mean_test_MeanAbsoluteError               params
+: 0                    15.945008          [add, True]
+: 1                     9.778336         [add, False]
+: 2                    16.983171   [add_damped, True]
+: 3                    11.627901  [add_damped, False]
+: 4                    11.289855          [mul, True]
+: 5                    10.083783         [mul, False]
+: 6                    13.041081   [mul_damped, True]
+: 7                    11.001230  [mul_damped, False]
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 予測の実施
 best_pred = cv_pipe_forecaster.predict(fh)
 
@@ -873,9 +886,8 @@ best_pred = cv_pipe_forecaster.predict(fh)
 mean_absolute_error(test, best_pred)
 #+end_src
 
-#+begin_example
-32.86696975874994
-#+end_example
+#+RESULTS:
+: 32.86697214389991
 
 *** 指数平滑化法と状態空間モデル
 :PROPERTIES:
@@ -885,7 +897,7 @@ mean_absolute_error(test, best_pred)
 :PROPERTIES:
 :CUSTOM_ID: statsmodelsによる実装
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # モデル化
 hw_ssm = tsa.ETSModel(
     train['value'], error='add', trend="add", seasonal="add",
@@ -898,6 +910,7 @@ pred_hw_ssm = hw_ssm.forecast(len(test))
 mean_absolute_error(test, pred_hw_ssm)
 #+end_src
 
+#+RESULTS:
 #+begin_example
 21.502929501798196
 #+end_example
