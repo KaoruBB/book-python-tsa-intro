@@ -138,7 +138,7 @@ _ = sm.graphics.tsa.plot_pacf(ar_data['nega'], lags=40,
 :PROPERTIES:
 :CUSTOM_ID: ma過程に従うデータの例
 :END:
-#+begin_src jupyter-python :exports both :file ./images/4-2-2-5.png :results output file
+#+begin_src jupyter-python :exports both :file ./images/4-2-3-3.png :results output file
 # データの読み込み
 ma_data = pd.read_csv(
     Path('../book-data') / '4-2-2-ma-data.csv',
@@ -151,19 +151,14 @@ ma_data.index.freq = 'D'
 ma_data.plot(subplots=True)
 #+end_src
 
-#+begin_example
-array([<Axes: xlabel='date'>, <Axes: xlabel='date'>],
-      dtype=object)
-#+end_example
-
-#+caption: png
-[[file:4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_files/4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_14_1.png]]
+#+RESULTS:
+[[file:./images/4-2-3-3.png]]
 
 **** MA過程に従うデータの自己相関
 :PROPERTIES:
 :CUSTOM_ID: ma過程に従うデータの自己相関
 :END:
-#+begin_src jupyter-python :exports both
+#+begin_src jupyter-python :exports both :file ./images/4-2-3-4.png :results output file
 # グラフサイズの指定
 fig, ax = plt.subplots(2, 1, figsize=(8, 4), tight_layout=True)
 
@@ -174,14 +169,14 @@ _ = sm.graphics.tsa.plot_acf(ma_data['nega'], lags=40,
                              title='MA nega ACF', ax=ax[1])
 #+end_src
 
-#+caption: png
-[[file:4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_files/4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_16_0.png]]
+#+RESULTS:
+[[./images/4-2-3-4.png]]
 
 **** MA過程に従うデータの偏自己相関
 :PROPERTIES:
 :CUSTOM_ID: ma過程に従うデータの偏自己相関
 :END:
-#+begin_src jupyter-python :exports both
+#+begin_src jupyter-python :exports both :file ./images/4-2-3-5.png :results output file
 # グラフサイズの指定
 fig, ax = plt.subplots(2, 1, figsize=(8, 4), tight_layout=True)
 
@@ -192,8 +187,8 @@ _ = sm.graphics.tsa.plot_pacf(ma_data['nega'], lags=40,
                               title='MA nega PACF', ax=ax[1])
 #+end_src
 
-#+caption: png
-[[file:4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_files/4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_18_0.png]]
+#+RESULTS:
+[[./images/4-2-3-5.png]]
 
 *** 最小二乗法を用いたARモデルの推定
 :PROPERTIES:
@@ -204,13 +199,12 @@ _ = sm.graphics.tsa.plot_pacf(ma_data['nega'], lags=40,
 ar_data['posi'].head(3)
 #+end_src
 
-#+begin_example
-date
-2023-01-01    1.788628
-2023-01-02    1.867413
-2023-01-03    1.590428
-Freq: D, Name: posi, dtype: float64
-#+end_example
+#+RESULTS:
+: date
+: 2023-01-01    1.788628
+: 2023-01-02    1.867413
+: 2023-01-03    1.590428
+: Freq: D, Name: posi, dtype: float64
 
 **** 単回帰分析の利用
 :PROPERTIES:
@@ -231,13 +225,13 @@ ar_lag = ar_lag.iloc[1:, :]
 print(ar_lag.head(3))
 #+end_src
 
-#+begin_example
-              target      lag1
-date                          
-2023-01-02  1.867413  1.788628
-2023-01-03  1.590428  1.867413
-2023-01-04 -0.591151  1.590428
-#+end_example
+#+RESULTS:
+:               target      lag1
+: date
+: 2023-01-02  1.867413  1.788628
+: 2023-01-03  1.590428  1.867413
+: 2023-01-04 -0.591151  1.590428
+
 
 #+begin_src jupyter-python :exports both
 # モデルの構築
@@ -247,11 +241,10 @@ ar_ols = smf.ols(formula='target ~ lag1', data=ar_lag).fit()
 ar_ols.params
 #+end_src
 
-#+begin_example
-Intercept    0.001189
-lag1         0.802707
-dtype: float64
-#+end_example
+#+RESULTS:
+: Intercept    0.001189
+: lag1         0.802707
+: dtype: float64
 
 **** AutoRegの利用
 :PROPERTIES:
@@ -265,11 +258,10 @@ ar_autoreg = tsa.AutoReg(ar_data['posi'], lags=1).fit()
 ar_autoreg.params
 #+end_src
 
-#+begin_example
-const      0.001189
-posi.L1    0.802707
-dtype: float64
-#+end_example
+#+RESULTS:
+: const      0.001189
+: posi.L1    0.802707
+: dtype: float64
 
 **** sktimeの利用
 :PROPERTIES:
@@ -284,19 +276,11 @@ forecaster = make_reduction(regressor, window_length=1, strategy="recursive")
 forecaster.fit(ar_data['posi'])
 
 # 推定されたパラメータ
-forecaster.get_fitted_params()
+print(forecaster.get_fitted_params())
 #+end_src
 
-#+begin_example
-{'estimator': LinearRegression(),
- 'transformers': None,
- 'window_length': 1,
- 'estimator__coef': array([0.80270658]),
- 'estimator__intercept': 0.0011885023794679685,
- 'estimator__n_features_in': 1,
- 'estimator__rank': 1,
- 'estimator__singular': array([33.33510614])}
-#+end_example
+#+RESULTS:
+: {'estimator': LinearRegression(), 'transformers': None, 'window_length': 1, 'estimator__coef': array([0.80270658]), 'estimator__intercept': 0.0011885023794679615, 'estimator__n_features_in': 1, 'estimator__rank': 1, 'estimator__singular': array([33.33510614])}
 
 *** 状態空間モデルを用いたARモデルの推定
 :PROPERTIES:
@@ -307,14 +291,44 @@ forecaster.get_fitted_params()
 mod_ar = tsa.SARIMAX(ar_data['posi'], order=(1, 0, 0), trend='c').fit()
 
 # 推定されたパラメータ
-mod_ar.params
+print(mod_ar.params)
 #+end_src
 
+#+RESULTS:
 #+begin_example
+RUNNING THE L-BFGS-B CODE
+
+           ,* * *
+
+Machine precision = 2.220D-16
+ N =            3     M =           10
+
+At X0         0 variables are exactly at the bounds
+
+At iterate    0    f=  1.45777D+00    |proj g|=  8.16574D-03
+
+           ,* * *
+
+Tit   = total number of iterations
+Tnf   = total number of function evaluations
+Tnint = total number of segments explored during Cauchy searches
+Skip  = number of BFGS updates skipped
+Nact  = number of active bounds at final generalized Cauchy point
+Projg = norm of the final projected gradient
+F     = final function value
+
+           ,* * *
+
+   N    Tit     Tnf  Tnint  Skip  Nact     Projg        F
+    3      3      6      1     0     0   1.143D-05   1.458D+00
+  F =   1.4577334878554420
+
+CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH
 intercept    0.009795
 ar.L1        0.802726
 sigma2       1.077611
 dtype: float64
+ This problem is unconstrained.
 #+end_example
 
 *** 状態空間モデルを用いたMAモデルの推定
@@ -326,14 +340,46 @@ dtype: float64
 mod_ma = tsa.SARIMAX(ma_data['posi'], order=(0, 0, 1), trend='c').fit()
 
 # 推定されたパラメータ
-mod_ma.params
+print(mod_ma.params)
 #+end_src
 
+#+RESULTS:
 #+begin_example
+RUNNING THE L-BFGS-B CODE
+
+           ,* * *
+
+Machine precision = 2.220D-16
+ N =            3     M =           10
+
+At X0         0 variables are exactly at the bounds
+
+At iterate    0    f=  1.38005D+00    |proj g|=  5.35087D-02
+
+At iterate    5    f=  1.37337D+00    |proj g|=  9.63275D-05
+
+           ,* * *
+
+Tit   = total number of iterations
+Tnf   = total number of function evaluations
+Tnint = total number of segments explored during Cauchy searches
+Skip  = number of BFGS updates skipped
+Nact  = number of active bounds at final generalized Cauchy point
+Projg = norm of the final projected gradient
+F     = final function value
+
+           ,* * *
+
+   N    Tit     Tnf  Tnint  Skip  Nact     Projg        F
+    3      6      9      1     0     0   7.658D-06   1.373D+00
+  F =   1.3733726583051891
+
+CONVERGENCE: NORM_OF_PROJECTED_GRADIENT_<=_PGTOL
 intercept    0.098855
 ma.L1        0.775439
 sigma2       0.910584
 dtype: float64
+ This problem is unconstrained.
 #+end_example
 
 *** ARモデルによる予測
@@ -349,11 +395,10 @@ dtype: float64
 ar_ols.params
 #+end_src
 
-#+begin_example
-Intercept    0.001189
-lag1         0.802707
-dtype: float64
-#+end_example
+#+RESULTS:
+: Intercept    0.001189
+: lag1         0.802707
+: dtype: float64
 
 #+begin_src jupyter-python :exports both
 # 1時点先の予測
@@ -362,9 +407,8 @@ ar_pred_1 = ar_ols.params.iloc[0] + \
 print(ar_pred_1)
 #+end_src
 
-#+begin_example
-[-0.2189263]
-#+end_example
+#+RESULTS:
+: [-0.2189263]
 
 #+begin_src jupyter-python :exports both
 # 2時点先以降の予測
@@ -375,10 +419,9 @@ print(ar_pred_2)
 print(ar_pred_3)
 #+end_src
 
-#+begin_example
-[-0.17454508]
-[-0.13891998]
-#+end_example
+#+RESULTS:
+: [-0.17454508]
+: [-0.13891998]
 
 **** statsmodelsにより推定されたモデルの予測
 :PROPERTIES:
@@ -389,12 +432,11 @@ print(ar_pred_3)
 ar_autoreg.forecast(3)
 #+end_src
 
-#+begin_example
-2024-01-01   -0.218926
-2024-01-02   -0.174545
-2024-01-03   -0.138920
-Freq: D, dtype: float64
-#+end_example
+#+RESULTS:
+: 2024-01-01   -0.218926
+: 2024-01-02   -0.174545
+: 2024-01-03   -0.138920
+: Freq: D, dtype: float64
 
 **** sktimeにより推定されたモデルの予測
 :PROPERTIES:
@@ -405,18 +447,17 @@ Freq: D, dtype: float64
 forecaster.predict(fh=np.arange(1, 4))
 #+end_src
 
-#+begin_example
-2024-01-01   -0.218926
-2024-01-02   -0.174545
-2024-01-03   -0.138920
-Freq: D, Name: posi, dtype: float64
-#+end_example
+#+RESULTS:
+: 2024-01-01   -0.218926
+: 2024-01-02   -0.174545
+: 2024-01-03   -0.138920
+: Freq: D, Name: posi, dtype: float64
 
 **** 長期予測
 :PROPERTIES:
 :CUSTOM_ID: 長期予測
 :END:
-#+begin_src jupyter-python :exports both
+#+begin_src jupyter-python :exports both :file ./images/4-2-7-4.png :results output file
 # グラフサイズの指定
 fig, ax = plt.subplots(figsize=(8, 2), tight_layout=True)
 
@@ -430,12 +471,8 @@ ax.plot(ar_autoreg.forecast(50), label='予測値')
 ax.legend()
 #+end_src
 
-#+begin_example
-<matplotlib.legend.Legend at 0x1a031a79760>
-#+end_example
-
-#+caption: png
-[[file:4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_files/4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_42_1.png]]
+#+RESULTS:
+[[file:./images/4-2-7-4.png]]
 
 *** MAモデルによる予測
 :PROPERTIES:
@@ -450,43 +487,42 @@ ax.legend()
 mod_ma.params
 #+end_src
 
-#+begin_example
-intercept    0.098855
-ma.L1        0.775439
-sigma2       0.910584
-dtype: float64
-#+end_example
+#+RESULTS:
+: intercept    0.098855
+: ma.L1        0.775439
+: sigma2       0.910584
+: dtype: float64
+
 
 #+begin_src jupyter-python :exports both
 # 最終日の残差
 ma_data['posi'].tail(1) - mod_ma.fittedvalues.tail(1)
 #+end_src
 
-#+begin_example
-date
-2023-12-31   -0.229561
-Freq: D, dtype: float64
-#+end_example
+#+RESULTS:
+: date
+: 2023-12-31   -0.229561
+: Freq: D, dtype: float64
+
 
 #+begin_src jupyter-python :exports both
 # 最終日の残差
 mod_ma.resid.tail(1)
 #+end_src
 
-#+begin_example
-date
-2023-12-31   -0.229561
-Freq: D, dtype: float64
-#+end_example
+#+RESULTS:
+: date
+: 2023-12-31   -0.229561
+: Freq: D, dtype: float64
+
 
 #+begin_src jupyter-python :exports both
 # 翌日の予測値
 mod_ma.params.iloc[0] + mod_ma.params.iloc[1] * mod_ma.resid.tail(1).values
 #+end_src
 
-#+begin_example
-array([-0.079155])
-#+end_example
+#+RESULTS:
+: array([-0.079155])
 
 **** statsmodelsにより推定されたモデルの予測
 :PROPERTIES:
@@ -496,12 +532,11 @@ array([-0.079155])
 mod_ma.forecast(3)
 #+end_src
 
-#+begin_example
-2024-01-01   -0.079155
-2024-01-02    0.098855
-2024-01-03    0.098855
-Freq: D, Name: predicted_mean, dtype: float64
-#+end_example
+#+RESULTS:
+: 2024-01-01   -0.079155
+: 2024-01-02    0.098855
+: 2024-01-03    0.098855
+: Freq: D, Name: predicted_mean, dtype: float64
 
 *** ARIMA過程
 :PROPERTIES:
@@ -511,10 +546,11 @@ Freq: D, Name: predicted_mean, dtype: float64
 :PROPERTIES:
 :CUSTOM_ID: arima過程に従うデータの例
 :END:
-#+begin_src jupyter-python :exports both
+#+begin_src jupyter-python :exports both :file ./images/4-2-11-2.png :results output file
 # データの読み込み
 arima_data = pd.read_csv(
-    '4-2-3-arima-data.csv', index_col='date', parse_dates=True, dtype='float')
+    Path('../book-data') / '4-2-3-arima-data.csv',
+    index_col='date', parse_dates=True, dtype='float')
 
 # 1日単位のデータ
 arima_data.index.freq = 'D'
@@ -523,18 +559,14 @@ arima_data.index.freq = 'D'
 arima_data.plot()
 #+end_src
 
-#+begin_example
-<Axes: xlabel='date'>
-#+end_example
-
-#+caption: png
-[[file:4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_files/4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_53_1.png]]
+#+RESULTS:
+[[file:./images/4-2-11-2.png]]
 
 **** ARIMA過程に従うデータの自己相関・偏自己相関
 :PROPERTIES:
 :CUSTOM_ID: arima過程に従うデータの自己相関偏自己相関
 :END:
-#+begin_src jupyter-python :exports both
+#+begin_src jupyter-python :exports both :file ./images/4-2-11-3.png :results output file
 # グラフサイズの指定
 fig, ax = plt.subplots(2, 1, figsize=(8, 4), tight_layout=True)
 
@@ -545,14 +577,14 @@ _ = sm.graphics.tsa.plot_pacf(arima_data, lags=40,
                               title='ARIMA PACF', ax=ax[1])
 #+end_src
 
-#+caption: png
-[[file:4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_files/4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_55_0.png]]
+#+RESULTS:
+[[file:./images/4-2-11-3.png]]
 
 **** 差分系列に対する自己相関・偏自己相関
 :PROPERTIES:
 :CUSTOM_ID: 差分系列に対する自己相関偏自己相関
 :END:
-#+begin_src jupyter-python :exports both
+#+begin_src jupyter-python :exports both :file ./images/4-2-11-4.png :results output file
 # 差分をとり、欠測値を排除する
 arma_data = arima_data.diff().iloc[1:, :]
 
@@ -566,8 +598,8 @@ _ = sm.graphics.tsa.plot_pacf(arma_data, lags=40,
                               title='ARMA PACF', ax=ax[1])
 #+end_src
 
-#+caption: png
-[[file:4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_files/4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_57_0.png]]
+#+RESULTS:
+[[file:./images/4-2-11-4.png]]
 
 *** ARIMAモデルの推定と予測
 :PROPERTIES:
@@ -585,6 +617,7 @@ mod_arima = tsa.SARIMAX(arima_data, order=(1, 1, 1), trend='c').fit()
 mod_arima.params
 #+end_src
 
+#+RESULTS:
 #+begin_example
 intercept    0.110056
 ar.L1        0.772905
@@ -597,7 +630,7 @@ dtype: float64
 :PROPERTIES:
 :CUSTOM_ID: arimaモデルによる予測
 :END:
-#+begin_src jupyter-python :exports both
+#+begin_src jupyter-python :exports both :file ./images/4-2-12-2.png :results output file
 # グラフサイズの指定
 fig, ax = plt.subplots(figsize=(8, 4))
 
@@ -611,9 +644,5 @@ ax.plot(mod_arima.forecast(50), label='予測値')
 ax.legend()
 #+end_src
 
-#+begin_example
-<matplotlib.legend.Legend at 0x1a033074c80>
-#+end_example
-
-#+caption: png
-[[file:4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_files/4-2-ARIMA%E3%83%A2%E3%83%87%E3%83%AB_62_1.png]]
+#+RESULTS:
+[[file:./images/4-2-12-2.png]]
