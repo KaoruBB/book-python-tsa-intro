@@ -1,6 +1,7 @@
 * 第4部　Box-Jenkins法とその周辺
 :PROPERTIES:
 :CUSTOM_ID: 第4部-box-jenkins法とその周辺
+:header-args:jupyter-python: :exports both :session tsa :kernel py_tsa :async yes :tangle yes
 :END:
 ** 第3章　SARIMAXモデル
 :PROPERTIES:
@@ -10,7 +11,14 @@
 :PROPERTIES:
 :CUSTOM_ID: 分析の準備
 :END:
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
+from pathlib import Path
+#+end_src
+
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 数値計算に使うライブラリ
 import numpy as np
 import pandas as pd
@@ -26,12 +34,12 @@ import statsmodels.api as sm
 import statsmodels.tsa.api as tsa
 
 # グラフの日本語表記
-from matplotlib import rcParams
-rcParams['font.family'] = 'sans-serif'
-rcParams['font.sans-serif'] = 'Meiryo'
+import japanize_matplotlib
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 表示設定
 np.set_printoptions(linewidth=60)
 pd.set_option('display.width', 80)
@@ -39,6 +47,8 @@ pd.set_option('display.width', 80)
 from matplotlib.pylab import rcParams
 rcParams['figure.figsize'] = 8, 4
 #+end_src
+
+#+RESULTS:
 
 *** 和分過程と季節和分過程
 :PROPERTIES:
@@ -48,7 +58,7 @@ rcParams['figure.figsize'] = 8, 4
 :PROPERTIES:
 :CUSTOM_ID: シミュレーションデータの作成
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 乱数の種
 np.random.seed(1)
 
@@ -57,7 +67,9 @@ sim_size = 100
 rw = np.cumsum(stats.norm.rvs(loc=0, scale=1, size=sim_size))
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 乱数の種
 np.random.seed(1)
 
@@ -66,13 +78,43 @@ np.put(srw, [0,1,2,3], stats.norm.rvs(loc=0, scale=1, size=4))
 
 for i in range(4, sim_size):
     np.put(srw, i, srw[i - 4] + stats.norm.rvs(loc=0, scale=1, size=1))
+srw
 #+end_src
+
+#+RESULTS:
+#+begin_example
+array([ 1.62434536, -0.61175641, -0.52817175, -1.07296862,
+        2.48975299, -2.91329511,  1.21664001, -1.83417552,
+        2.80879209, -3.16266549,  2.67874795, -3.89431623,
+        2.48637489, -3.54671984,  3.81251739, -4.9942075 ,
+        2.31394668, -4.42457826,  3.85473114, -4.41139229,
+        1.2133275 , -3.27985455,  4.75632186, -3.90889795,
+        2.11418345, -3.96358241,  4.63343163, -4.84466738,
+        1.84629537, -3.43322694,  3.94177088, -5.24142091,
+        1.15912267, -4.27843258,  3.27052475, -5.25408551,
+        0.04181232, -4.04401688,  4.93032693, -4.51204135,
+       -0.15002323, -4.93164585,  4.18316863, -2.81958675,
+       -0.09921548, -5.5686415 ,  4.37408412, -0.71933161,
+        0.02094348, -4.95143839,  4.67425444, -1.07158146,
+       -1.12157472, -5.30078111,  4.46536021, -0.48495826,
+       -0.28259131, -4.36967903,  4.75094753,  0.4001829 ,
+       -1.03698925, -3.11681087,  5.26387735,  0.10209006,
+       -0.5484711 , -3.19238258,  6.39550674,  1.62190688,
+        1.6371043 , -4.58887892,  4.95139293,  1.11744102,
+        1.79714137, -3.71271   ,  5.26702788, -0.9047602 ,
+        1.49093736, -2.88473536,  5.49712262, -0.14274902,
+        1.26860922, -3.08549343,  5.68368401,  0.26730263,
+        1.46690894, -2.96648478,  5.01302172,  0.64486642,
+        1.58873021, -1.83700087,  6.2119396 ,  0.83002283,
+        1.21344526, -2.47573128,  6.63543395,  0.9073629 ,
+        0.86959158, -2.43213442,  6.01543311,  1.60539494])
+#+end_example
 
 **** ランダムウォーク過程と季節ランダムウォーク過程の比較
 :PROPERTIES:
 :CUSTOM_ID: ランダムウォーク過程と季節ランダムウォーク過程の比較
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both :file ./images/4-3-3-3a.png :results output file
 # DataFrameにまとめる
 rw_df = pd.DataFrame({
     'rw':rw, 'srw':srw
@@ -82,14 +124,10 @@ rw_df = pd.DataFrame({
 rw_df.plot(subplots=True)
 #+end_src
 
-#+begin_example
-array([<Axes: >, <Axes: >], dtype=object)
-#+end_example
+#+RESULTS:
+[[file:./images/4-3-3-3a.png]]
 
-#+caption: png
-[[file:4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_files/4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_9_1.png]]
-
-#+begin_src python
+#+begin_src jupyter-python :exports both :file ./images/4-3-3-3b.png :results output file
 # ランダムウォーク過程の1階差分系列
 rw_df['rw_diff'] = rw_df.diff(1).rw
 
@@ -100,18 +138,14 @@ rw_df['srw_sdiff'] = rw_df.diff(4).srw
 rw_df[['rw_diff', 'srw_sdiff']].plot(subplots=True)
 #+end_src
 
-#+begin_example
-array([<Axes: >, <Axes: >], dtype=object)
-#+end_example
-
-#+caption: png
-[[file:4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_files/4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_10_1.png]]
+#+RESULTS:
+[[file:./images/4-3-3-3b.png]]
 
 **** 季節ランダムウォーク過程の累積和
 :PROPERTIES:
 :CUSTOM_ID: 季節ランダムウォーク過程の累積和
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both :file ./images/4-3-3-4.png :results output file
 # 季節ランダムウォーク過程に対して、さらに累積和をとる
 strw = rw_df['srw'].cumsum()
 
@@ -119,12 +153,8 @@ strw = rw_df['srw'].cumsum()
 plt.plot(strw)
 #+end_src
 
-#+begin_example
-[<matplotlib.lines.Line2D at 0x2ae896f8c20>]
-#+end_example
-
-#+caption: png
-[[file:4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_files/4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_12_1.png]]
+#+RESULTS:
+[[file:./images/4-3-3-4.png]]
 
 *** SARIMAモデルの推定と予測
 :PROPERTIES:
@@ -134,7 +164,7 @@ plt.plot(strw)
 :PROPERTIES:
 :CUSTOM_ID: データの読み込み
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 飛行機乗客数データの読み込み
 air_passengers = sm.datasets.get_rdataset("AirPassengers").data
 
@@ -150,11 +180,13 @@ train = air_passengers.loc['1949-01':'1957-12']
 test =  air_passengers.loc['1958-01':'1960-12']
 #+end_src
 
+#+RESULTS:
+
 **** 飛行機乗客数データに対するSARIMAモデルの適用
 :PROPERTIES:
 :CUSTOM_ID: 飛行機乗客数データに対するsarimaモデルの適用
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 mod_sarima = tsa.SARIMAX(
     train, order=(3, 1, 2), seasonal_order=(1, 1, 1, 12)
 ).fit(maxiter=1000)
@@ -162,33 +194,81 @@ mod_sarima = tsa.SARIMAX(
 print(mod_sarima.params)
 #+end_src
 
+#+RESULTS:
 #+begin_example
-ar.L1        0.490087
-ar.L2        0.323658
-ar.L3       -0.145460
-ma.L1       -0.750357
-ma.L2       -0.161098
-ar.S.L12    -0.251575
-ma.S.L12     0.110758
-sigma2      84.290726
+RUNNING THE L-BFGS-B CODE
+
+           ,* * *
+
+Machine precision = 2.220D-16
+ N =            8     M =           10
+
+At X0         0 variables are exactly at the bounds
+
+At iterate    0    f=  3.21511D+00    |proj g|=  4.54162D-02
+
+At iterate    5    f=  3.21332D+00    |proj g|=  1.24293D-02
+
+At iterate   10    f=  3.20996D+00    |proj g|=  5.43837D-03
+
+At iterate   15    f=  3.20815D+00    |proj g|=  2.23576D-02
+
+At iterate   20    f=  3.20470D+00    |proj g|=  8.72747D-03
+
+At iterate   25    f=  3.20314D+00    |proj g|=  3.72899D-03
+
+At iterate   30    f=  3.20270D+00    |proj g|=  5.19250D-03
+ This problem is unconstrained.
+
+At iterate   35    f=  3.20266D+00    |proj g|=  8.79202D-04
+
+At iterate   40    f=  3.20266D+00    |proj g|=  2.60132D-05
+
+           * * *
+
+Tit   = total number of iterations
+Tnf   = total number of function evaluations
+Tnint = total number of segments explored during Cauchy searches
+Skip  = number of BFGS updates skipped
+Nact  = number of active bounds at final generalized Cauchy point
+Projg = norm of the final projected gradient
+F     = final function value
+
+           * * *
+
+   N    Tit     Tnf  Tnint  Skip  Nact     Projg        F
+    8     41     46      1     0     0   8.176D-06   3.203D+00
+  F =   3.2026639264750147
+
+CONVERGENCE: NORM_OF_PROJECTED_GRADIENT_<=_PGTOL
+ar.L1        0.490095
+ar.L2        0.323656
+ar.L3       -0.145462
+ma.L1       -0.750363
+ma.L2       -0.161094
+ar.S.L12    -0.251581
+ma.S.L12     0.110763
+sigma2      84.290529
 dtype: float64
 #+end_example
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 参考：
 print(mod_sarima.summary())
 #+end_src
 
+#+RESULTS:
 #+begin_example
-                                      SARIMAX Results                                       
+                                      SARIMAX Results
 ============================================================================================
 Dep. Variable:                                value   No. Observations:                  108
 Model:             SARIMAX(3, 1, 2)x(1, 1, [1], 12)   Log Likelihood                -345.888
-Date:                              Wed, 11 Sep 2024   AIC                            707.775
-Time:                                      16:46:00   BIC                            728.206
+Date:                              Wed, 04 Dec 2024   AIC                            707.775
+Time:                                      11:56:49   BIC                            728.206
 Sample:                                  01-01-1949   HQIC                           716.031
-                                       - 12-01-1957                                         
-Covariance Type:                                opg                                         
+                                       - 12-01-1957
+Covariance Type:                                opg
 ==============================================================================
                  coef    std err          z      P>|z|      [0.025      0.975]
 ------------------------------------------------------------------------------
@@ -199,7 +279,7 @@ ma.L1         -0.7504      0.729     -1.029      0.303      -2.179       0.678
 ma.L2         -0.1611      0.711     -0.227      0.821      -1.554       1.232
 ar.S.L12      -0.2516      0.787     -0.320      0.749      -1.795       1.291
 ma.S.L12       0.1108      0.834      0.133      0.894      -1.523       1.745
-sigma2        84.2907     13.552      6.220      0.000      57.730     110.852
+sigma2        84.2905     13.552      6.220      0.000      57.730     110.851
 ===================================================================================
 Ljung-Box (L1) (Q):                   0.03   Jarque-Bera (JB):                 1.70
 Prob(Q):                              0.86   Prob(JB):                         0.43
@@ -211,7 +291,8 @@ Warnings:
 [1] Covariance matrix calculated using the outer product of gradients (complex-step).
 #+end_example
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # ほかのソフトウェアと近い方法にする
 print(
     tsa.SARIMAX(train, order=(3, 1, 2), 
@@ -222,20 +303,21 @@ print(
 )
 #+end_src
 
+#+RESULTS:
 #+begin_example
 Optimization terminated successfully.
          Current function value: 3.640928
          Iterations: 1267
          Function evaluations: 1819
-                                      SARIMAX Results                                       
+                                      SARIMAX Results
 ============================================================================================
 Dep. Variable:                         D.DS12.value   No. Observations:                   95
 Model:             SARIMAX(3, 0, 2)x(1, 0, [1], 12)   Log Likelihood                -345.888
-Date:                              Wed, 11 Sep 2024   AIC                            707.776
-Time:                                      16:46:01   BIC                            728.207
+Date:                              Wed, 04 Dec 2024   AIC                            707.776
+Time:                                      11:58:28   BIC                            728.207
 Sample:                                  02-01-1950   HQIC                           716.032
-                                       - 12-01-1957                                         
-Covariance Type:                             approx                                         
+                                       - 12-01-1957
+Covariance Type:                             approx
 ==============================================================================
                  coef    std err          z      P>|z|      [0.025      0.975]
 ------------------------------------------------------------------------------
@@ -262,7 +344,7 @@ Warnings:
 :PROPERTIES:
 :CUSTOM_ID: sarimaモデルによる予測
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both :file ./images/4-3-6-3.png :results output file
 # 予測
 pred_sarima = mod_sarima.forecast(36)
 
@@ -280,12 +362,8 @@ ax.plot(pred_sarima, label='SARIMA(3,1,2)(1,1,1)')
 ax.legend()
 #+end_src
 
-#+begin_example
-<matplotlib.legend.Legend at 0x2ae89705c10>
-#+end_example
-
-#+caption: png
-[[file:4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_files/4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_21_1.png]]
+#+RESULTS:
+[[file:./images/4-3-6-3.png]]
 
 *** SARIMAXモデルの推定と予測
 :PROPERTIES:
@@ -295,10 +373,10 @@ ax.legend()
 :PROPERTIES:
 :CUSTOM_ID: データの読み込み-1
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # データの読み込み
 ts_sales_bj = pd.read_csv(
-    '4-3-1-sales-data.csv',  # ファイル名
+    Path('../book-data') / '4-3-1-sales-data.csv',  # ファイル名
     index_col='date',        # インデックスとして扱う列名
     parse_dates=True,        # インデックスを「時間軸」として扱う
     dtype='float'            # データの型(浮動小数点)
@@ -310,24 +388,25 @@ ts_sales_bj.index.freq = 'MS'
 print(ts_sales_bj.head(3))
 #+end_src
 
-#+begin_example
-            sales  discount
-date                       
-2010-01-01   71.0       0.0
-2010-02-01   67.0       0.0
-2010-03-01   64.0       0.0
-#+end_example
+#+RESULTS:
+:             sales  discount
+: date
+: 2010-01-01   71.0       0.0
+: 2010-02-01   67.0       0.0
+: 2010-03-01   64.0       0.0
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both :file ./images/4-3-8-1a.png :results output file
 # 可視化
 ts_sales_bj.plot(subplots=True)
 plt.tight_layout()
 #+end_src
 
-#+caption: png
-[[file:4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_files/4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_25_0.png]]
+#+RESULTS:
+[[file:./images/4-3-8-1.png]]
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both :file ./images/4-3-8-1b.png :results output file
 # グラフサイズの指定
 fig, ax = plt.subplots(figsize=(8, 2), tight_layout=True)
 
@@ -335,24 +414,22 @@ fig, ax = plt.subplots(figsize=(8, 2), tight_layout=True)
 ax.plot(np.log(ts_sales_bj['sales']))
 #+end_src
 
-#+begin_example
-[<matplotlib.lines.Line2D at 0x2ae8cd10140>]
-#+end_example
+#+RESULTS:
+[[file:./images/4-3-8-1b.png]]
 
-#+caption: png
-[[file:4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_files/4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_26_1.png]]
-
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 訓練データとテストデータに分割する
 train = ts_sales_bj.loc['2010-01':'2018-12']
 test =  ts_sales_bj.loc['2019-01':'2019-12']
 #+end_src
 
+#+RESULTS:
+
 **** SARIMAXモデルの推定
 :PROPERTIES:
 :CUSTOM_ID: sarimaxモデルの推定
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 mod_sarimax = tsa.SARIMAX(
     np.log(train['sales']), exog=train['discount'],
     order=(1, 1, 1), seasonal_order=(1, 1, 1, 12)
@@ -361,16 +438,17 @@ mod_sarimax = tsa.SARIMAX(
 print(mod_sarimax.params)
 #+end_src
 
+#+RESULTS:
 #+begin_example
 Optimization terminated successfully.
          Current function value: -0.725494
-         Iterations: 406
-         Function evaluations: 634
-discount    0.780721
-ar.L1      -0.289926
-ma.L1      -0.164008
-ar.S.L12   -0.017217
-ma.S.L12   -0.042015
+         Iterations: 397
+         Function evaluations: 622
+discount    0.780722
+ar.L1      -0.289940
+ma.L1      -0.163978
+ar.S.L12   -0.017105
+ma.S.L12   -0.042117
 sigma2      0.011220
 dtype: float64
 #+end_example
@@ -379,7 +457,7 @@ dtype: float64
 :PROPERTIES:
 :CUSTOM_ID: sarimaxモデルによる予測
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both :file ./images/4-3-8-3.png :results output file
 # 予測
 pred_sarimax = mod_sarimax.forecast(
     12, exog = test['discount'].values.reshape(-1,1))
@@ -398,18 +476,14 @@ ax.plot(np.exp(pred_sarimax), label='予測')
 ax.legend()
 #+end_src
 
-#+begin_example
-<matplotlib.legend.Legend at 0x2ae8994dc10>
-#+end_example
-
-#+caption: png
-[[file:4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_files/4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_31_1.png]]
+#+RESULTS:
+[[file:./images/4-3-8-3.png]]
 
 **** 信頼区間付きの予測
 :PROPERTIES:
 :CUSTOM_ID: 信頼区間付きの予測
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 信頼区間もあわせて計算
 # forecast関数の代わりにget_forecast関数を使う
 pred_ci = mod_sarimax.get_forecast(
@@ -420,14 +494,14 @@ pred_ci = mod_sarimax.get_forecast(
 print(pred_ci.summary_frame(alpha=0.05).head(3))
 #+end_src
 
-#+begin_example
-sales           mean   mean_se  mean_ci_lower  mean_ci_upper
-2019-01-01  3.839755  0.105925       3.632145       4.047364
-2019-02-01  3.273200  0.120689       3.036654       3.509746
-2019-03-01  2.982692  0.140423       2.707468       3.257915
-#+end_example
+#+RESULTS:
+: sales           mean   mean_se  mean_ci_lower  mean_ci_upper
+: 2019-01-01  3.839753  0.105924       3.632145       4.047360
+: 2019-02-01  3.273199  0.120689       3.036653       3.509744
+: 2019-03-01  2.982691  0.140423       2.707466       3.257915
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both :file ./images/4-3-8-4.png :results output file
 #  対数変換していたのを、元に戻した
 conf_int_df_exp = pred_ci.summary_frame(alpha=0.05).apply(np.exp)
 
@@ -455,9 +529,5 @@ ax.fill_between(
 ax.legend()
 #+end_src
 
-#+begin_example
-<matplotlib.legend.Legend at 0x2ae8ce39190>
-#+end_example
-
-#+caption: png
-[[file:4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_files/4-3-SARIMAX%E3%83%A2%E3%83%87%E3%83%AB_34_1.png]]
+#+RESULTS:
+[[file:./images/4-3-8-4.png]]
