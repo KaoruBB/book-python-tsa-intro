@@ -1,6 +1,7 @@
 * 第4部　Box-Jenkins法とその周辺
 :PROPERTIES:
 :CUSTOM_ID: 第4部-box-jenkins法とその周辺
+:header-args:jupyter-python: :exports both :session tsa :kernel py_tsa :async yes :tangle yes
 :END:
 ** 第4章　モデル選択
 :PROPERTIES:
@@ -10,7 +11,14 @@
 :PROPERTIES:
 :CUSTOM_ID: 分析の準備
 :END:
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
+from pathlib import Path
+#+end_src
+
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 数値計算に使うライブラリ
 import numpy as np
 import pandas as pd
@@ -37,12 +45,12 @@ from sktime.performance_metrics.forecasting import (
 )
 
 # グラフの日本語表記
-from matplotlib import rcParams
-rcParams['font.family'] = 'sans-serif'
-rcParams['font.sans-serif'] = 'Meiryo'
+import japanize_matplotlib
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 表示設定
 np.set_printoptions(linewidth=60)
 pd.set_option('display.width', 80)
@@ -51,10 +59,12 @@ from matplotlib.pylab import rcParams
 rcParams['figure.figsize'] = 8, 4
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # データの読み込み
 ts_sales_bj = pd.read_csv(
-    '4-3-1-sales-data.csv',  # ファイル名
+    Path('../book-data') /'4-3-1-sales-data.csv',  # ファイル名
     index_col='date',        # インデックスとして扱う列名
     parse_dates=True,        # インデックスを「時間軸」として扱う
     dtype='float'            # データの型(浮動小数点)
@@ -67,6 +77,8 @@ train = ts_sales_bj.loc['2010-01':'2018-12']
 test =  ts_sales_bj.loc['2019-01':'2019-12']
 #+end_src
 
+#+RESULTS:
+
 *** 単位根検定の実装
 :PROPERTIES:
 :CUSTOM_ID: 単位根検定の実装
@@ -75,60 +87,57 @@ test =  ts_sales_bj.loc['2019-01':'2019-12']
 :PROPERTIES:
 :CUSTOM_ID: 間違った差分の階数の判断方法
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # これは間違い
 pm.arima.ndiffs(np.log(train['sales']), test='kpss')
 #+end_src
 
-#+begin_example
-1
-#+end_example
+#+RESULTS:
+: 1
 
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # これは間違い
 pm.arima.nsdiffs(np.log(train['sales']), m=12, test='ocsb')
 #+end_src
 
-#+begin_example
-0
-#+end_example
+#+RESULTS:
+: 0
 
 **** 正しい判断の方法
 :PROPERTIES:
 :CUSTOM_ID: 正しい判断の方法
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 残差の取得
 ols_resid = smf.ols('np.log(sales) ~ discount', data=train).fit().resid
 # 確認
 ols_resid.head(3)
 #+end_src
 
-#+begin_example
-date
-2010-01-01   -0.025589
-2010-02-01   -0.083576
-2010-03-01   -0.129386
-dtype: float64
-#+end_example
+#+RESULTS:
+: date
+: 2010-01-01   -0.025589
+: 2010-02-01   -0.083576
+: 2010-03-01   -0.129386
+: dtype: float64
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 残差に対して適用する
 pm.arima.ndiffs(ols_resid, test='kpss')
 #+end_src
 
-#+begin_example
-1
-#+end_example
+#+RESULTS:
+: 1
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 残差に対して適用する
 pm.arima.nsdiffs(ols_resid, m=12, test='ocsb')
 #+end_src
 
-#+begin_example
-1
-#+end_example
+#+RESULTS:
+: 1
 
 *** 自動予測アプローチの実践
 :PROPERTIES:
@@ -138,7 +147,7 @@ pm.arima.nsdiffs(ols_resid, m=12, test='ocsb')
 :PROPERTIES:
 :CUSTOM_ID: 半自動モデル選択の実行
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 mod_sarimax_best = pm.arima.auto_arima(
     y = np.log(train['sales']),                  # データ
     X = train['discount'].values.reshape(-1,1),  # 外生変数
@@ -156,24 +165,27 @@ mod_sarimax_best = pm.arima.auto_arima(
 )
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 print(mod_sarimax_best.summary())
 #+end_src
 
+#+RESULTS:
 #+begin_example
-                                     SARIMAX Results                                      
+                                     SARIMAX Results
 ==========================================================================================
 Dep. Variable:                                  y   No. Observations:                  108
 Model:             SARIMAX(1, 1, 0)x(0, 1, 0, 12)   Log Likelihood                  77.949
-Date:                            Wed, 11 Sep 2024   AIC                           -149.898
-Time:                                    16:46:31   BIC                           -142.236
+Date:                            Sun, 08 Dec 2024   AIC                           -149.898
+Time:                                    08:22:43   BIC                           -142.236
 Sample:                                01-01-2010   HQIC                          -146.802
-                                     - 12-01-2018                                         
-Covariance Type:                              opg                                         
+                                     - 12-01-2018
+Covariance Type:                              opg
 ==============================================================================
                  coef    std err          z      P>|z|      [0.025      0.975]
 ------------------------------------------------------------------------------
-x1             0.7762      0.023     33.211      0.000       0.730       0.822
+x1             0.7762      0.023     33.212      0.000       0.730       0.822
 ar.L1         -0.4454      0.087     -5.109      0.000      -0.616      -0.275
 sigma2         0.0113      0.001      7.593      0.000       0.008       0.014
 ===================================================================================
@@ -191,7 +203,7 @@ Warnings:
 :PROPERTIES:
 :CUSTOM_ID: 参考モデルのリストを取得
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 参考：モデルのリストを取得
 mod_sarimax_list = pm.arima.auto_arima(
     y = np.log(train['sales']),                  # データ
@@ -211,7 +223,9 @@ mod_sarimax_list = pm.arima.auto_arima(
 )
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # モデル事にAICとセットでDataFrameにまとめる
 result_df = pd.DataFrame({
     'model': np.tile('', len(mod_sarimax_list)),
@@ -226,76 +240,78 @@ for i in range(0,len(mod_sarimax_list)):
 print(result_df.sort_values('AIC'))
 #+end_src
 
+#+RESULTS:
 #+begin_example
                                  model         AIC
 0    ARIMA(1,1,0)(0,1,0)[12]           -149.897609
 1    ARIMA(0,1,1)(0,1,0)[12]           -149.043075
-2    ARIMA(1,1,1)(0,1,0)[12]           -148.459464
-3    ARIMA(0,1,2)(0,1,0)[12]           -148.440133
-4    ARIMA(2,1,0)(0,1,0)[12]           -148.364485
+2    ARIMA(1,1,1)(0,1,0)[12]           -148.459461
+3    ARIMA(0,1,2)(0,1,0)[12]           -148.440131
+4    ARIMA(2,1,0)(0,1,0)[12]           -148.364486
 5    ARIMA(1,1,0)(0,1,1)[12]           -148.313625
-6    ARIMA(1,1,0)(1,1,0)[12]           -148.310738
+6    ARIMA(1,1,0)(1,1,0)[12]           -148.310737
 7    ARIMA(0,1,1)(0,1,1)[12]           -147.510976
 8    ARIMA(0,1,1)(1,1,0)[12]           -147.487736
-9    ARIMA(1,1,1)(0,1,1)[12]           -146.706143
-10   ARIMA(1,1,1)(1,1,0)[12]           -146.702858
-11   ARIMA(0,1,2)(0,1,1)[12]           -146.677925
-12   ARIMA(0,1,2)(1,1,0)[12]           -146.676054
-13   ARIMA(2,1,0)(0,1,1)[12]           -146.634326
-14   ARIMA(2,1,0)(1,1,0)[12]           -146.631508
-15   ARIMA(1,1,2)(0,1,0)[12]           -146.444433
-16   ARIMA(2,1,1)(0,1,0)[12]           -146.439378
-17   ARIMA(1,1,0)(2,1,0)[12]           -146.349422
-18   ARIMA(1,1,0)(0,1,2)[12]           -146.338057
-19   ARIMA(1,1,0)(1,1,1)[12]           -146.316137
-20   ARIMA(0,1,1)(2,1,0)[12]           -145.659551
-21   ARIMA(0,1,1)(0,1,2)[12]           -145.511357
-22   ARIMA(0,1,1)(1,1,1)[12]           -145.511011
-23   ARIMA(1,1,2)(0,1,1)[12]           -144.920762
-24   ARIMA(1,1,2)(1,1,0)[12]           -144.915956
-25   ARIMA(2,1,1)(0,1,1)[12]           -144.788128
-26   ARIMA(2,1,1)(1,1,0)[12]           -144.778861
-27   ARIMA(1,1,1)(2,1,0)[12]           -144.738104
-28   ARIMA(1,1,1)(0,1,2)[12]           -144.713996
-29   ARIMA(1,1,1)(1,1,1)[12]           -144.706755
-30   ARIMA(0,1,2)(2,1,0)[12]           -144.703608
-31   ARIMA(0,1,2)(0,1,2)[12]           -144.691636
-32   ARIMA(0,1,2)(1,1,1)[12]           -144.678963
-33   ARIMA(2,1,2)(0,1,0)[12]           -144.665185
-34   ARIMA(2,1,0)(2,1,0)[12]           -144.664562
-35   ARIMA(2,1,0)(0,1,2)[12]           -144.646176
-36   ARIMA(2,1,0)(1,1,1)[12]           -144.635309
-37   ARIMA(1,1,2)(2,1,0)[12]           -142.960411
-38   ARIMA(1,1,2)(0,1,2)[12]           -142.925429
-39   ARIMA(2,1,2)(0,1,1)[12]           -142.924820
-40   ARIMA(1,1,2)(1,1,1)[12]           -142.921171
-41   ARIMA(2,1,2)(1,1,0)[12]           -142.920451
-42   ARIMA(2,1,1)(2,1,0)[12]           -142.852338
-43   ARIMA(2,1,1)(0,1,2)[12]           -142.789425
-44   ARIMA(2,1,1)(1,1,1)[12]           -142.788249
-45   ARIMA(0,1,0)(2,1,2)[12]           -139.362337
-46   ARIMA(0,1,0)(2,1,1)[12]           -139.308445
-47   ARIMA(0,1,0)(0,1,1)[12]           -135.571871
-48   ARIMA(0,1,0)(1,1,0)[12]           -135.087434
-49   ARIMA(0,1,0)(2,1,0)[12]           -134.902373
-50   ARIMA(0,1,0)(0,1,2)[12]           -133.784788
-51   ARIMA(0,1,0)(1,1,1)[12]           -133.610523
-52   ARIMA(0,1,0)(0,1,0)[12]           -132.230523
+9    ARIMA(0,1,1)(2,1,2)[12]           -147.368576
+10   ARIMA(1,1,1)(0,1,1)[12]           -146.706144
+11   ARIMA(1,1,1)(1,1,0)[12]           -146.702859
+12   ARIMA(0,1,2)(0,1,1)[12]           -146.677926
+13   ARIMA(0,1,2)(1,1,0)[12]           -146.676053
+14   ARIMA(2,1,0)(0,1,1)[12]           -146.634326
+15   ARIMA(2,1,0)(1,1,0)[12]           -146.631508
+16   ARIMA(1,1,2)(0,1,0)[12]           -146.444433
+17   ARIMA(2,1,1)(0,1,0)[12]           -146.439379
+18   ARIMA(1,1,0)(2,1,0)[12]           -146.349424
+19   ARIMA(1,1,0)(0,1,2)[12]           -146.338062
+20   ARIMA(1,1,0)(1,1,1)[12]           -146.315935
+21   ARIMA(0,1,1)(2,1,0)[12]           -145.659551
+22   ARIMA(0,1,1)(0,1,2)[12]           -145.511357
+23   ARIMA(0,1,1)(1,1,1)[12]           -145.510974
+24   ARIMA(1,1,2)(1,1,0)[12]           -144.915958
+25   ARIMA(2,1,1)(0,1,1)[12]           -144.788129
+26   ARIMA(2,1,1)(1,1,0)[12]           -144.778860
+27   ARIMA(1,1,1)(2,1,0)[12]           -144.738103
+28   ARIMA(1,1,1)(0,1,2)[12]           -144.713991
+29   ARIMA(1,1,1)(1,1,1)[12]           -144.706773
+30   ARIMA(0,1,2)(2,1,0)[12]           -144.703606
+31   ARIMA(0,1,2)(0,1,2)[12]           -144.691635
+32   ARIMA(1,1,2)(0,1,1)[12]           -144.685853
+33   ARIMA(0,1,2)(1,1,1)[12]           -144.678954
+34   ARIMA(2,1,2)(0,1,0)[12]           -144.665180
+35   ARIMA(2,1,0)(2,1,0)[12]           -144.664562
+36   ARIMA(2,1,0)(0,1,2)[12]           -144.646176
+37   ARIMA(2,1,0)(1,1,1)[12]           -144.635315
+38   ARIMA(1,1,2)(2,1,0)[12]           -142.960421
+39   ARIMA(1,1,2)(0,1,2)[12]           -142.925473
+40   ARIMA(2,1,2)(0,1,1)[12]           -142.924738
+41   ARIMA(1,1,2)(1,1,1)[12]           -142.921171
+42   ARIMA(2,1,2)(1,1,0)[12]           -142.920394
+43   ARIMA(2,1,1)(2,1,0)[12]           -142.852354
+44   ARIMA(2,1,1)(0,1,2)[12]           -142.716852
+45   ARIMA(2,1,1)(1,1,1)[12]           -142.714401
+46   ARIMA(0,1,0)(2,1,2)[12]           -139.362343
+47   ARIMA(0,1,0)(2,1,1)[12]           -139.308539
+48   ARIMA(0,1,0)(0,1,1)[12]           -135.571871
+49   ARIMA(0,1,0)(1,1,0)[12]           -135.087434
+50   ARIMA(0,1,0)(2,1,0)[12]           -134.902373
+51   ARIMA(0,1,0)(0,1,2)[12]           -133.784788
+52   ARIMA(0,1,0)(1,1,1)[12]           -133.610523
+53   ARIMA(0,1,0)(0,1,0)[12]           -132.230523
 #+end_example
 
 *** モデルの診断
 :PROPERTIES:
 :CUSTOM_ID: モデルの診断
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both :file ./images/4-4-11a.png :results output file
 # 残差診断
 _ = mod_sarimax_best.plot_diagnostics(lags=30, figsize=(15, 8))
 #+end_src
 
-#+caption: png
-[[file:4-4-%E3%83%A2%E3%83%87%E3%83%AB%E9%81%B8%E6%8A%9E_files/4-4-%E3%83%A2%E3%83%87%E3%83%AB%E9%81%B8%E6%8A%9E_21_0.png]]
+#+RESULTS:
+[[file:./images/4-4-11a.png]]
 
-#+begin_src python
+#+begin_src jupyter-python :exports both :file ./images/4-4-11b.png :results output file
 # 残差の自己相関の検定
 # 1時点前から24時点前まで、1つずつ最大次数をずらして、24回検定を行う
 res_test = mod_sarimax_best.arima_res_.test_serial_correlation(
@@ -311,14 +327,11 @@ ax.scatter(np.arange(1,25), res_test[0][1])
 ax.plot(np.arange(1,25), np.tile(0.05, 24), color='red')
 #+end_src
 
-#+begin_example
-[<matplotlib.lines.Line2D at 0x2cb2fc63440>]
-#+end_example
+#+RESULTS:
+[[file:./images/4-4-11b.png]]
 
-#+caption: png
-[[file:4-4-%E3%83%A2%E3%83%87%E3%83%AB%E9%81%B8%E6%8A%9E_files/4-4-%E3%83%A2%E3%83%87%E3%83%AB%E9%81%B8%E6%8A%9E_22_1.png]]
 
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 残差の正規性の検定(Jarque-Bera検定)
 # 1つ目がJB統計量
 # 2つ目がp値
@@ -326,16 +339,15 @@ ax.plot(np.arange(1,25), np.tile(0.05, 24), color='red')
 mod_sarimax_best.arima_res_.test_normality(method='jarquebera')
 #+end_src
 
-#+begin_example
-array([[ 1.3298735 ,  0.51430606, -0.0148029 ,
-         3.57887092]])
-#+end_example
+#+RESULTS:
+: array([[ 1.32976268,  0.51433456, -0.01481396,
+:          3.5788456 ]])
 
 *** sktimeを利用する方法
 :PROPERTIES:
 :CUSTOM_ID: sktimeを利用する方法
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 予測期間
 fh = np.arange(1, len(test) + 1)
 
@@ -344,7 +356,9 @@ train_period = train.to_period()
 test_period = test.to_period()
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 予測手法の指定
 arima_forecaster = AutoARIMA(
     test='kpss',                   # KPSS検定で、差分を取る階数を決める
@@ -365,347 +379,9 @@ arima_forecaster.fit(y=np.log(train_period['sales']),
                      X=train_period['discount'])
 #+end_src
 
-#+begin_html
-  <style>#sk-57b74bd4-d33f-428d-8af4-e019caec9378 {
-      /* Definition of color scheme common for light and dark mode */
-      --sklearn-color-text: black;
-      --sklearn-color-line: gray;
-      /* Definition of color scheme for objects */
-      --sklearn-color-level-0: #fff5e6;
-      --sklearn-color-level-1: #f6e4d2;
-      --sklearn-color-level-2: #ffe0b3;
-      --sklearn-color-level-3: chocolate;
+#+RESULTS:
 
-      /* Specific color for light theme */
-      --sklearn-color-text-on-default-background: var(--theme-code-foreground, var(--jp-content-font-color1, black));
-      --sklearn-color-background: var(--theme-background, var(--jp-layout-color0, white));
-      --sklearn-color-border-box: var(--theme-code-foreground, var(--jp-content-font-color1, black));
-      --sklearn-color-icon: #696969;
-
-      @media (prefers-color-scheme: dark) {
-        /* Redefinition of color scheme for dark theme */
-        --sklearn-color-text-on-default-background: var(--theme-code-foreground, var(--jp-content-font-color1, white));
-        --sklearn-color-background: var(--theme-background, var(--jp-layout-color0, #111));
-        --sklearn-color-border-box: var(--theme-code-foreground, var(--jp-content-font-color1, white));
-        --sklearn-color-icon: #878787;
-      }
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 {
-      color: var(--sklearn-color-text);
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 pre {
-      padding: 0;
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 input.sk-hidden--visually {
-      border: 0;
-      clip: rect(1px 1px 1px 1px);
-      clip: rect(1px, 1px, 1px, 1px);
-      height: 1px;
-      margin: -1px;
-      overflow: hidden;
-      padding: 0;
-      position: absolute;
-      width: 1px;
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-dashed-wrapped {
-      border: 1px dashed var(--sklearn-color-line);
-      margin: 0 0.4em 0.5em 0.4em;
-      box-sizing: border-box;
-      padding-bottom: 0.4em;
-      background-color: var(--sklearn-color-background);
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-container {
-      /* jupyter's `normalize.less` sets `[hidden] { display: none; }`
-         but bootstrap.min.css set `[hidden] { display: none !important; }`
-         so we also need the `!important` here to be able to override the
-         default hidden behavior on the sphinx rendered scikit-learn.org.
-         See: https://github.com/scikit-learn/scikit-learn/issues/21755 */
-      display: inline-block !important;
-      position: relative;
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-text-repr-fallback {
-      display: none;
-    }
-
-    div.sk-parallel-item,
-    div.sk-serial,
-    div.sk-item {
-      /* draw centered vertical line to link estimators */
-      background-image: linear-gradient(var(--sklearn-color-text-on-default-background), var(--sklearn-color-text-on-default-background));
-      background-size: 2px 100%;
-      background-repeat: no-repeat;
-      background-position: center center;
-    }
-
-    /* Parallel-specific style estimator block */
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-parallel-item::after {
-      content: "";
-      width: 100%;
-      border-bottom: 2px solid var(--sklearn-color-text-on-default-background);
-      flex-grow: 1;
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-parallel {
-      display: flex;
-      align-items: stretch;
-      justify-content: center;
-      background-color: var(--sklearn-color-background);
-      position: relative;
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-parallel-item {
-      display: flex;
-      flex-direction: column;
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-parallel-item:first-child::after {
-      align-self: flex-end;
-      width: 50%;
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-parallel-item:last-child::after {
-      align-self: flex-start;
-      width: 50%;
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-parallel-item:only-child::after {
-      width: 0;
-    }
-
-    /* Serial-specific style estimator block */
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-serial {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      background-color: var(--sklearn-color-background);
-      padding-right: 1em;
-      padding-left: 1em;
-    }
-
-
-    /* Toggleable style: style used for estimator/Pipeline/ColumnTransformer box that is
-    clickable and can be expanded/collapsed.
-    - Pipeline and ColumnTransformer use this feature and define the default style
-    - Estimators will overwrite some part of the style using the `sk-estimator` class
-    */
-
-    /* Pipeline and ColumnTransformer style (default) */
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-toggleable {
-      /* Default theme specific background. It is overwritten whether we have a
-      specific estimator or a Pipeline/ColumnTransformer */
-      background-color: var(--sklearn-color-background);
-    }
-
-    /* Toggleable label */
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 label.sk-toggleable__label {
-      cursor: pointer;
-      display: block;
-      width: 100%;
-      margin-bottom: 0;
-      padding: 0.5em;
-      box-sizing: border-box;
-      text-align: center;
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 label.sk-toggleable__label-arrow:before {
-      /* Arrow on the left of the label */
-      content: "笆ｸ";
-      float: left;
-      margin-right: 0.25em;
-      color: var(--sklearn-color-icon);
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 label.sk-toggleable__label-arrow:hover:before {
-      color: var(--sklearn-color-text);
-    }
-
-    /* Toggleable content - dropdown */
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-toggleable__content {
-      max-height: 0;
-      max-width: 0;
-      overflow: hidden;
-      text-align: left;
-      background-color: var(--sklearn-color-level-0);
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-toggleable__content pre {
-      margin: 0.2em;
-      border-radius: 0.25em;
-      color: var(--sklearn-color-text);
-      background-color: var(--sklearn-color-level-0);
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 input.sk-toggleable__control:checked~div.sk-toggleable__content {
-      /* Expand drop-down */
-      max-height: 200px;
-      max-width: 100%;
-      overflow: auto;
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {
-      content: "笆ｾ";
-    }
-
-    /* Pipeline/ColumnTransformer-specific style */
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {
-      color: var(--sklearn-color-text);
-      background-color: var(--sklearn-color-level-2);
-    }
-
-    /* Estimator-specific style */
-
-    /* Colorize estimator box */
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {
-      /* unfitted */
-      background-color: var(--sklearn-color-level-2);
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-label label.sk-toggleable__label,
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-label label {
-      /* The background is the default theme color */
-      color: var(--sklearn-color-text-on-default-background);
-    }
-
-    /* On hover, darken the color of the background */
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-label:hover label.sk-toggleable__label {
-      color: var(--sklearn-color-text);
-      background-color: var(--sklearn-color-level-2);
-    }
-
-    /* Estimator label */
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-label label {
-      font-family: monospace;
-      font-weight: bold;
-      display: inline-block;
-      line-height: 1.2em;
-    }
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-label-container {
-      text-align: center;
-    }
-
-    /* Estimator-specific */
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-estimator {
-      font-family: monospace;
-      border: 1px dotted var(--sklearn-color-border-box);
-      border-radius: 0.25em;
-      box-sizing: border-box;
-      margin-bottom: 0.5em;
-      background-color: var(--sklearn-color-level-0);
-    }
-
-    /* on hover */
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 div.sk-estimator:hover {
-      background-color: var(--sklearn-color-level-2);
-    }
-
-    /* Specification for estimator info */
-
-    .sk-estimator-doc-link,
-    a:link.sk-estimator-doc-link,
-    a:visited.sk-estimator-doc-link {
-      float: right;
-      font-size: smaller;
-      line-height: 1em;
-      font-family: monospace;
-      background-color: var(--sklearn-color-background);
-      border-radius: 1em;
-      height: 1em;
-      width: 1em;
-      text-decoration: none !important;
-      margin-left: 1ex;
-      border: var(--sklearn-color-level-1) 1pt solid;
-      color: var(--sklearn-color-level-1);
-    }
-
-    /* On hover */
-    div.sk-estimator:hover .sk-estimator-doc-link:hover,
-    .sk-estimator-doc-link:hover,
-    div.sk-label-container:hover .sk-estimator-doc-link:hover,
-    .sk-estimator-doc-link:hover {
-      background-color: var(--sklearn-color-level-3);
-      color: var(--sklearn-color-background);
-      text-decoration: none;
-    }
-
-    /* Span, style for the box shown on hovering the info icon */
-    .sk-estimator-doc-link span {
-      display: none;
-      z-index: 9999;
-      position: relative;
-      font-weight: normal;
-      right: .2ex;
-      padding: .5ex;
-      margin: .5ex;
-      width: min-content;
-      min-width: 20ex;
-      max-width: 50ex;
-      color: var(--sklearn-color-text);
-      box-shadow: 2pt 2pt 4pt #999;
-      background: var(--sklearn-color-level-0);
-      border: .5pt solid var(--sklearn-color-level-3);
-    }
-
-    .sk-estimator-doc-link:hover span {
-      display: block;
-    }
-
-    /* "?"-specific style due to the `<a>` HTML tag */
-
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 a.estimator_doc_link {
-      float: right;
-      font-size: 1rem;
-      line-height: 1em;
-      font-family: monospace;
-      background-color: var(--sklearn-color-background);
-      border-radius: 1rem;
-      height: 1rem;
-      width: 1rem;
-      text-decoration: none;
-      color: var(--sklearn-color-level-1);
-      border: var(--sklearn-color-level-1) 1pt solid;
-    }
-
-    /* On hover */
-    #sk-57b74bd4-d33f-428d-8af4-e019caec9378 a.estimator_doc_link:hover {
-      background-color: var(--sklearn-color-level-3);
-      color: var(--sklearn-color-background);
-      text-decoration: none;
-    }
-  </style>
-#+end_html
-
-<<sk-57b74bd4-d33f-428d-8af4-e019caec9378>>
-
-#+begin_html
-  <pre>AutoARIMA(max_p=2, max_q=2, maxiter=5000, method=&#x27;nm&#x27;, n_jobs=-1, sp=12,
-            start_P=0, start_Q=0, start_p=0, start_q=0, stepwise=False,
-            with_intercept=False)</pre>
-#+end_html
-
-Please rerun this cell to show the HTML repr or trust the notebook.
-
-AutoARIMA?Documentation for AutoARIMA
-
-#+begin_html
-  <pre>AutoARIMA(max_p=2, max_q=2, maxiter=5000, method=&#x27;nm&#x27;, n_jobs=-1, sp=12,
-            start_P=0, start_Q=0, start_p=0, start_q=0, stepwise=False,
-            with_intercept=False)</pre>
-#+end_html
-
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 予測の実施
 sarimax_fore = arima_forecaster.predict(fh, X=test_period['discount'])
 
@@ -713,6 +389,5 @@ sarimax_fore = arima_forecaster.predict(fh, X=test_period['discount'])
 mean_absolute_error(test_period['sales'], sarimax_fore)
 #+end_src
 
-#+begin_example
-25.240766610356218
-#+end_example
+#+RESULTS:
+: 25.240766610356218
