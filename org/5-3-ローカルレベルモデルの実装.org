@@ -1,12 +1,13 @@
 * 第5部　線形ガウス状態空間モデル
 :PROPERTIES:
 :CUSTOM_ID: 第5部-線形ガウス状態空間モデル
+:header-args:jupyter-python: :exports both :session tsa :kernel py_tsa :async yes :tangle yes
 :END:
 ** 第3章　ローカルレベルモデルの実装
 :PROPERTIES:
 :CUSTOM_ID: 第3章-ローカルレベルモデルの実装
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 数値計算に使うライブラリ
 import numpy as np
 import pandas as pd
@@ -23,7 +24,9 @@ import seaborn as sns
 sns.set()
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 表示設定
 np.set_printoptions(linewidth=60)
 pd.set_option('display.width', 80)
@@ -32,11 +35,13 @@ from matplotlib.pylab import rcParams
 rcParams['figure.figsize'] = 8, 4
 #+end_src
 
+#+RESULTS:
+
 *** シミュレーションデータの生成
 :PROPERTIES:
 :CUSTOM_ID: シミュレーションデータの生成
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 乱数の種
 np.random.seed(1)
 
@@ -52,11 +57,13 @@ y_ts = pd.Series(
     y, index=pd.date_range(start='2020-01-01', periods=sim_size, freq='D'))
 #+end_src
 
+#+RESULTS:
+
 *** カルマンフィルタを実行するクラスの作成
 :PROPERTIES:
 :CUSTOM_ID: カルマンフィルタを実行するクラスの作成
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 class LocalLevel:
     # データを格納(pd.Seriesで、日付インデックスがついている想定)
     def __init__(self, ts_data):
@@ -158,11 +165,13 @@ class LocalLevel:
         plot_df.plot()
 #+end_src
 
+#+RESULTS:
+
 *** カルマンフィルタの実行
 :PROPERTIES:
 :CUSTOM_ID: カルマンフィルタの実行
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # データを格納
 local_level = LocalLevel(y_ts)
 
@@ -173,73 +182,70 @@ local_level.initialize(initial_a=0, initial_P=1000000)
 local_level.filter(s_irregular=10, s_level=1)
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # フィルタ化推定量
 local_level.a.round(5).head(3)
 #+end_src
 
-#+begin_example
-2020-01-01    29.39971
-2020-01-02    33.43318
-2020-01-03    33.07468
-Freq: D, dtype: float64
-#+end_example
+#+RESULTS:
+: 2020-01-01    29.39971
+: 2020-01-02    33.43318
+: 2020-01-03    33.07468
+: Freq: D, dtype: float64
 
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 参考：フィルタ化推定量の分散
 local_level.P.round(5).head(3)
 #+end_src
 
-#+begin_example
-2020-01-01    9.99990
-2020-01-02    5.23807
-2020-01-03    3.84163
-Freq: D, dtype: float64
-#+end_example
+#+RESULTS:
+: 2020-01-01    9.99990
+: 2020-01-02    5.23807
+: 2020-01-03    3.84163
+: Freq: D, dtype: float64
 
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 観測値の1時点先予測値の残差
 local_level.v.round(5).head(3)
 #+end_src
 
-#+begin_example
-2020-01-01    29.40000
-2020-01-02     7.70029
-2020-01-03    -0.93318
-Freq: D, dtype: float64
-#+end_example
+#+RESULTS:
+: 2020-01-01    29.40000
+: 2020-01-02     7.70029
+: 2020-01-03    -0.93318
+: Freq: D, dtype: float64
 
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 参考：観測値の1時点先予測値の残差の分散
 local_level.F.round(5).head(3)
 #+end_src
 
-#+begin_example
-2020-01-01    1.000010e+06
-2020-01-02    2.099990e+01
-2020-01-03    1.623807e+01
-Freq: D, dtype: float64
-#+end_example
+#+RESULTS:
+: 2020-01-01    1.000010e+06
+: 2020-01-02    2.099990e+01
+: 2020-01-03    1.623807e+01
+: Freq: D, dtype: float64
 
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # カルマンゲイン
 local_level.K.round(5).head(3)
 #+end_src
 
-#+begin_example
-2020-01-01    0.99999
-2020-01-02    0.52381
-2020-01-03    0.38416
-Freq: D, dtype: float64
-#+end_example
+#+RESULTS:
+: 2020-01-01    0.99999
+: 2020-01-02    0.52381
+: 2020-01-03    0.38416
+: Freq: D, dtype: float64
 
-#+begin_src python
+#+begin_src jupyter-python :exports both :file ./images/5-3-4.png :results output file
 # 推定された状態の可視化
 local_level.plot_level()
 #+end_src
 
-#+caption: png
-[[file:5-3-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E5%AE%9F%E8%A3%85_files/5-3-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E5%AE%9F%E8%A3%85_14_0.png]]
+#+RESULTS:
+[[file:./images/5-3-4.png]]
 
 *** パラメータを変えた場合の挙動
 :PROPERTIES:
@@ -249,7 +255,7 @@ local_level.plot_level()
 :PROPERTIES:
 :CUSTOM_ID: 状態の初期分散が小さい場合
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both :file ./images/5-3-5-1.png :results output file
 # 初期化
 local_level.initialize(initial_a=0, initial_P=0.01)
 
@@ -260,14 +266,14 @@ local_level.filter(s_irregular=10, s_level=1)
 local_level.plot_level()
 #+end_src
 
-#+caption: png
-[[file:5-3-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E5%AE%9F%E8%A3%85_files/5-3-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E5%AE%9F%E8%A3%85_17_0.png]]
+#+RESULTS:
+[[file:./images/5-3-5-1.png]]
 
 **** 観測誤差の分散が非常に大きい場合
 :PROPERTIES:
 :CUSTOM_ID: 観測誤差の分散が非常に大きい場合
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both :file ./images/5-3-5-2.png :results output file
 # 初期化
 local_level.initialize(initial_a=0, initial_P=1000000)
 
@@ -278,14 +284,14 @@ local_level.filter(s_irregular=1000, s_level=0.001)
 local_level.plot_level()
 #+end_src
 
-#+caption: png
-[[file:5-3-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E5%AE%9F%E8%A3%85_files/5-3-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E5%AE%9F%E8%A3%85_19_0.png]]
+#+RESULTS:
+[[file:./images/5-3-5-2.png]]
 
 **** 観測誤差の分散が非常に小さい場合
 :PROPERTIES:
 :CUSTOM_ID: 観測誤差の分散が非常に小さい場合
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both :file ./images/5-3-5-3.png :results output file
 # 初期化
 local_level.initialize(initial_a=0, initial_P=1000000)
 
@@ -296,8 +302,8 @@ local_level.filter(s_irregular=0.001, s_level=1000)
 local_level.plot_level()
 #+end_src
 
-#+caption: png
-[[file:5-3-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E5%AE%9F%E8%A3%85_files/5-3-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E5%AE%9F%E8%A3%85_21_0.png]]
+#+RESULTS:
+[[file:./images/5-3-5-3.png]]
 
 *** 最尤法によるパラメータの推定
 :PROPERTIES:
@@ -307,7 +313,7 @@ local_level.plot_level()
 :PROPERTIES:
 :CUSTOM_ID: 対数尤度の計算
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 初期化
 local_level.initialize(initial_a=0, initial_P=1000000)
 
@@ -318,15 +324,14 @@ local_level.filter(s_irregular=10, s_level=1)
 local_level.llf()
 #+end_src
 
-#+begin_example
--328.7964774283829
-#+end_example
+#+RESULTS:
+: -328.7964774283829
 
 **** パラメータの推定
 :PROPERTIES:
 :CUSTOM_ID: パラメータの推定
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # パラメータの推定
 local_level.fit(start_params=[1, 1])
 
@@ -334,28 +339,26 @@ local_level.fit(start_params=[1, 1])
 local_level.llf()
 #+end_src
 
-#+begin_example
--311.71335569235623
-#+end_example
+#+RESULTS:
+: -311.71335569235623
 
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 推定されたパラメータ
 print('観測誤差の分散', np.round(local_level.s_irregular, 5))
 print('過程誤差の分散', np.round(local_level.s_level, 5))
 #+end_src
 
-#+begin_example
-観測誤差の分散 22.49697
-過程誤差の分散 0.6952
-#+end_example
+#+RESULTS:
+: 観測誤差の分散 22.49697
+: 過程誤差の分散 0.6952
 
-#+begin_src python
+#+begin_src jupyter-python :exports both :file ./images/5-3-6.png :results output file
 # 参考：推定された状態の可視化
 local_level.plot_level()
 #+end_src
 
-#+caption: png
-[[file:5-3-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E5%AE%9F%E8%A3%85_files/5-3-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E5%AE%9F%E8%A3%85_28_0.png]]
+#+RESULTS:
+[[file:./images/5-3-6.png]]
 
 *** statsmodelsの利用
 :PROPERTIES:
@@ -365,55 +368,61 @@ local_level.plot_level()
 :PROPERTIES:
 :CUSTOM_ID: パラメータを固定してフィルタリング
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # データの格納とモデルの特定
 mod_local_level_fix = tsa.UnobservedComponents(
     y_ts, level='local level', loglikelihood_burn=0)
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 初期化
 mod_local_level_fix.initialize_approximate_diffuse(1000000)
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # フィルタリング
 res_local_level_fix = mod_local_level_fix.filter(pd.Series(np.array([10, 1])))
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # フィルタ化推定量を取り出す
 np.round(res_local_level_fix.level["filtered"][0:3], 5)
 #+end_src
 
-#+begin_example
-array([29.39971, 33.43318, 33.07468])
-#+end_example
+#+RESULTS:
+: array([29.39971, 33.43318, 33.07468])
 
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 対数尤度を取り出す
 np.round(res_local_level_fix.llf, 5)
 #+end_src
 
-#+begin_example
--328.79648
-#+end_example
+#+RESULTS:
+: -328.79648
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both
 # 参考
 print(res_local_level_fix.summary())
 #+end_src
 
+#+RESULTS:
 #+begin_example
-                        Unobserved Components Results                         
+                        Unobserved Components Results
 ==============================================================================
 Dep. Variable:                      y   No. Observations:                  100
 Model:                    local level   Log Likelihood                -328.796
-Date:                Wed, 11 Sep 2024   AIC                            661.593
-Time:                        16:47:27   BIC                            666.803
+Date:                Wed, 11 Dec 2024   AIC                            661.593
+Time:                        14:29:58   BIC                            666.803
 Sample:                    01-01-2020   HQIC                           663.702
-                         - 04-09-2020                                         
-Covariance Type:                  opg                                         
+                         - 04-09-2020
+Covariance Type:                  opg
 ====================================================================================
                        coef    std err          z      P>|z|      [0.025      0.975]
 ------------------------------------------------------------------------------------
@@ -434,7 +443,7 @@ Warnings:
 :PROPERTIES:
 :CUSTOM_ID: パラメータの推定-1
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # ローカルレベルモデルの推定
 
 # データの格納とモデルの特定
@@ -452,20 +461,21 @@ res_local_level = mod_local_level.fit(
 print(res_local_level.summary())
 #+end_src
 
+#+RESULTS:
 #+begin_example
 Optimization terminated successfully.
          Current function value: 3.117134
          Iterations: 48
          Function evaluations: 92
-                        Unobserved Components Results                         
+                        Unobserved Components Results
 ==============================================================================
 Dep. Variable:                      y   No. Observations:                  100
 Model:                    local level   Log Likelihood                -311.713
-Date:                Wed, 11 Sep 2024   AIC                            627.427
-Time:                        16:47:27   BIC                            632.637
+Date:                Wed, 11 Dec 2024   AIC                            627.427
+Time:                        14:30:50   BIC                            632.637
 Sample:                    01-01-2020   HQIC                           629.535
-                         - 04-09-2020                                         
-Covariance Type:                  opg                                         
+                         - 04-09-2020
+Covariance Type:                  opg
 ====================================================================================
                        coef    std err          z      P>|z|      [0.025      0.975]
 ------------------------------------------------------------------------------------
@@ -482,40 +492,38 @@ Warnings:
 [1] Covariance matrix calculated using the outer product of gradients (complex-step).
 #+end_example
 
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 参考：お手製のカルマンフィルタと結果がほぼ同じになっていることの確認
 np.sum((local_level.a - res_local_level.level["filtered"]) ** 2)
 #+end_src
 
-#+begin_example
-4.3155904268713204e-08
-#+end_example
+#+RESULTS:
+: 4.3155904268713204e-08
 
-#+begin_src python
+#+begin_src jupyter-python :exports both :file ./images/5-3-7-3.png :results output file
 # フィルタ化推定量の描画
 _ = res_local_level.plot_components(which="filtered", observed=False)
 #+end_src
 
-#+caption: png
-[[file:5-3-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E5%AE%9F%E8%A3%85_files/5-3-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E5%AE%9F%E8%A3%85_40_0.png]]
+#+RESULTS:
+[[file:./images/5-3-7-3.png]]
 
 *** 状態の平滑化
 :PROPERTIES:
 :CUSTOM_ID: 状態の平滑化
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 平滑化推定量を取り出す
 np.round(res_local_level.level["smoothed"][0:3], 5)
 #+end_src
 
-#+begin_example
-array([30.19488, 30.21947, 30.03142])
-#+end_example
+#+RESULTS:
+: array([30.19488, 30.21947, 30.03142])
 
-#+begin_src python
+#+begin_src jupyter-python :exports both :file ./images/5-3-7-4.png :results output file
 # 平滑化推定量の描画
 _ = res_local_level.plot_components(which="smoothed", observed=False)
 #+end_src
 
-#+caption: png
-[[file:5-3-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E5%AE%9F%E8%A3%85_files/5-3-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E5%AE%9F%E8%A3%85_43_0.png]]
+#+RESULTS:
+[[file:./images/5-3-7-4.png]]
