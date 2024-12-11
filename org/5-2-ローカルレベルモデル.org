@@ -1,6 +1,7 @@
 * 第5部　線形ガウス状態空間モデル
 :PROPERTIES:
 :CUSTOM_ID: 第5部-線形ガウス状態空間モデル
+:header-args:jupyter-python: :exports both :session tsa :kernel py_tsa :async yes :tangle yes
 :END:
 ** 第2章　ローカルレベルモデル
 :PROPERTIES:
@@ -10,7 +11,7 @@
 :PROPERTIES:
 :CUSTOM_ID: 分析の準備
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 数値計算に使うライブラリ
 import numpy as np
 import pandas as pd
@@ -22,7 +23,9 @@ import seaborn as sns
 sns.set()
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 表示設定
 np.set_printoptions(linewidth=60)
 pd.set_option('display.width', 80)
@@ -31,11 +34,13 @@ from matplotlib.pylab import rcParams
 rcParams['figure.figsize'] = 8, 4
 #+end_src
 
+#+RESULTS:
+
 *** ローカルレベルモデルのシミュレーション
 :PROPERTIES:
 :CUSTOM_ID: ローカルレベルモデルのシミュレーション
 :END:
-#+begin_src python
+#+begin_src jupyter-python :exports both
 # 乱数の種
 np.random.seed(1)
 
@@ -44,12 +49,16 @@ sim_size = 100
 mu = np.cumsum(stats.norm.rvs(loc=0, scale=1, size=sim_size).round(1)) + 30
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 観測値の作成
 y = mu + stats.norm.rvs(loc=0, scale=5, size=sim_size).round(1)
 #+end_src
 
-#+begin_src python
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # DataFrameにまとめる
 local_level_df = pd.DataFrame({'mu': mu, 'y':y})
 
@@ -57,21 +66,17 @@ local_level_df = pd.DataFrame({'mu': mu, 'y':y})
 print(local_level_df.head(3))
 #+end_src
 
-#+begin_example
-     mu     y
-0  31.6  29.4
-1  31.0  37.1
-2  30.5  32.5
-#+end_example
+#+RESULTS:
+:      mu     y
+: 0  31.6  29.4
+: 1  31.0  37.1
+: 2  30.5  32.5
 
-#+begin_src python
+
+#+begin_src jupyter-python :exports both :file ./images/5-2-2.png :results output file
 # 可視化
 local_level_df.plot()
 #+end_src
 
-#+begin_example
-<Axes: >
-#+end_example
-
-#+caption: png
-[[file:5-2-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB_files/5-2-%E3%83%AD%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%AC%E3%83%99%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB_8_1.png]]
+#+RESULTS:
+[[file:./images/5-2-2.png]]
