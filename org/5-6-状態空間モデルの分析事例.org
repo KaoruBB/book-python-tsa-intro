@@ -1,6 +1,7 @@
 * 第5部　線形ガウス状態空間モデル
 :PROPERTIES:
 :CUSTOM_ID: 第5部-線形ガウス状態空間モデル
+:header-args:jupyter-python: :exports both :session tsa :kernel py_tsa :async yes :tangle yes
 :END:
 ** 第6章　状態空間モデルの分析事例
 :PROPERTIES:
@@ -10,7 +11,14 @@
 :PROPERTIES:
 :CUSTOM_ID: 分析の準備
 :END:
-#+begin_example
+
+#+begin_src jupyter-python :exports both
+from pathlib import Path
+#+end_src
+
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 数値計算に使うライブラリ
 import numpy as np
 import pandas as pd
@@ -33,28 +41,60 @@ import plotly.express as px
 from sktime.forecasting.structural import UnobservedComponents
 
 # グラフの日本語表記
-from matplotlib import rcParams
-rcParams['font.family'] = 'sans-serif'
-rcParams['font.sans-serif'] = 'Meiryo'
-#+end_example
+import japanize_matplotlib
+#+end_src
 
-#+begin_example
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 表示設定
 np.set_printoptions(linewidth=60)
 pd.set_option('display.width', 80)
 
 from matplotlib.pylab import rcParams
 rcParams['figure.figsize'] = 8, 4
-#+end_example
+#+end_src
+
+#+RESULTS:
+
+#+begin_src jupyter-python
+import os
+
+from hashlib import md5
+
+from IPython.display import Image, FileLink
+
+import plotly.graph_objects as go
+import plotly.io as pio
+
+
+def myshow(self, *args, **kwargs):
+    html = pio.to_html(self)
+    mhash = md5(html.encode('utf-8')).hexdigest()
+    if not os.path.isdir('.ob-jupyter'):
+        os.mkdir('.ob-jupyter')
+    fhtml = os.path.join('.ob-jupyter', mhash + '.html')
+
+    with open(fhtml, 'w') as f:
+        f.write(html)
+
+    display(FileLink(fhtml, result_html_suffix=''))
+    return Image(pio.to_image(self, 'png'))
+
+
+go.Figure.show = myshow
+#+end_src
+
+#+RESULTS:
 
 *** 日単位売り上げデータの読み込み
 :PROPERTIES:
 :CUSTOM_ID: 日単位売り上げデータの読み込み
 :END:
-#+begin_example
+#+begin_src jupyter-python :exports both
 # 日単位データの読み込み
 sales_day = pd.read_csv(
-    '5-6-1-daily-sales-data.csv', 
+    Path('../book-data')/'5-6-1-daily-sales-data.csv',
     index_col='date',
     parse_dates=True,
     dtype='float'
@@ -64,19 +104,41 @@ sales_day.index.freq = 'D'
 # 結果の確認
 print(sales_day.head(3))
 print(sales_day.tail(3))
-#+end_example
+#+end_src
 
-#+begin_example
+#+RESULTS:
+:                  sales  flyer
+: date
+: 2000-01-01  462.387217    0.0
+: 2000-01-02  363.262237    0.0
+: 2000-01-03  356.648654    0.0
+:                  sales  flyer
+: date
+: 2001-06-27  243.739643    0.0
+: 2001-06-28  205.223214    0.0
+: 2001-06-29  192.051090    0.0
+
+#+begin_src jupyter-python :exports both :file ./images/5-6-1.png :results output file
 # 可視化
 sales_day.plot(subplots=True)
 plt.tight_layout()
-#+end_example
+#+end_src
 
-#+begin_example
+#+RESULTS:
+[[file:./images/5-6-1.png]]
+
+
+#+begin_src jupyter-python :exports both :pandoc t :file ./images/5-6-1b
 # 参考：動的なグラフ
-px.line(sales_day.sales)
-#+end_example
+f =px.line(sales_day.sales)
+f.show()
+#+end_src
 
+#+RESULTS:
+:RESULTS:
+[[file:.ob-jupyter/cb3107d97c0d729256a251bb8b79eb2f.html]]
+[[file:./images/5-6-1b.png]]
+:END:
 *** 探索的データ分析
 :PROPERTIES:
 :CUSTOM_ID: 探索的データ分析
@@ -85,7 +147,7 @@ px.line(sales_day.sales)
 :PROPERTIES:
 :CUSTOM_ID: カレンダー情報ごとの集計
 :END:
-#+begin_example
+#+begin_src jupyter-python :exports both
 # カレンダー情報を入れたデータ
 sales_day_eda = sales_day.copy()
 
@@ -97,9 +159,16 @@ sales_day_eda['weekday'] = sales_day_eda.index.weekday
 
 # 結果の確認
 print(sales_day_eda.head(3))
-#+end_example
+#+end_src
 
-#+begin_example
+#+RESULTS:
+:                  sales  flyer  month  weekday
+: date
+: 2000-01-01  462.387217    0.0      1        5
+: 2000-01-02  363.262237    0.0      1        6
+: 2000-01-03  356.648654    0.0      1        0
+
+#+begin_src jupyter-python :exports both :file ./images/5-6-2.png :results output file
 # 2列のグラフ
 fig, ax = plt.subplots(ncols=2, tight_layout=True)
 
@@ -112,18 +181,27 @@ sales_day_eda.groupby('weekday').mean()['sales'].plot(kind='bar', ax=ax[1])
 # X軸ラベルを回転させないようにする
 ax[0].xaxis.set_tick_params(rotation=0)
 ax[1].xaxis.set_tick_params(rotation=0)
-#+end_example
+#+end_src
+
+#+RESULTS:
+[[file:./images/5-6-2.png]]
 
 **** チラシの効果
 :PROPERTIES:
 :CUSTOM_ID: チラシの効果
 :END:
-#+begin_example
+#+begin_src jupyter-python :exports both
 # チラシの有無別売り上げ平均値
 sales_day_eda.groupby('flyer').mean()['sales']
-#+end_example
+#+end_src
 
-#+begin_example
+#+RESULTS:
+: flyer
+: 0.0    324.384704
+: 1.0    320.663946
+: Name: sales, dtype: float64
+
+#+begin_src jupyter-python :exports both
 # ラグをとる
 sales_day_eda['flyer_lag1'] = sales_day_eda['flyer'].shift(1).fillna(0)
 sales_day_eda['flyer_lag2'] = sales_day_eda['flyer'].shift(2).fillna(0)
@@ -131,13 +209,34 @@ sales_day_eda['flyer_lag2'] = sales_day_eda['flyer'].shift(2).fillna(0)
 # チラシを配布した翌日と翌々日の集計
 print(sales_day_eda.groupby('flyer_lag1').mean()['sales'])
 print(sales_day_eda.groupby('flyer_lag2').mean()['sales'])
-#+end_example
+#+end_src
 
-#+begin_example
+#+RESULTS:
+: flyer_lag1
+: 0.0    319.717045
+: 1.0    390.953406
+: Name: sales, dtype: float64
+: flyer_lag2
+: 0.0    320.347595
+: 1.0    381.458064
+: Name: sales, dtype: float64
+
+#+begin_src jupyter-python :exports both
 # チラシをいつ配っているか
 # aiueo
 sales_day_eda.groupby('weekday').sum()['flyer']
-#+end_example
+#+end_src
+
+#+RESULTS:
+: weekday
+: 0     0.0
+: 1     0.0
+: 2     0.0
+: 3     0.0
+: 4    34.0
+: 5     0.0
+: 6     0.0
+: Name: flyer, dtype: float64
 
 *** 特徴量の作成
 :PROPERTIES:
@@ -147,20 +246,29 @@ sales_day_eda.groupby('weekday').sum()['flyer']
 :PROPERTIES:
 :CUSTOM_ID: ラグ変数
 :END:
-#+begin_example
+#+begin_src jupyter-python :exports both
 # ラグ特徴量を加える
 sales_day['flyer_lag1'] = sales_day['flyer'].shift(1).fillna(0)
 sales_day['flyer_lag2'] = sales_day['flyer'].shift(2).fillna(0)
 
 # 結果の確認
 print(sales_day.loc['2000-02-17':'2000-02-21'])
-#+end_example
+#+end_src
+
+#+RESULTS:
+:                  sales  flyer  flyer_lag1  flyer_lag2
+: date
+: 2000-02-17  273.073148    0.0         0.0         0.0
+: 2000-02-18  295.044613    1.0         0.0         0.0
+: 2000-02-19  419.312910    0.0         1.0         0.0
+: 2000-02-20  393.584443    0.0         0.0         1.0
+: 2000-02-21  385.480800    0.0         0.0         0.0
 
 **** 祝日フラグ
 :PROPERTIES:
 :CUSTOM_ID: 祝日フラグ
 :END:
-#+begin_example
+#+begin_src jupyter-python :exports both
 # 祝日を内閣府のWebサイトから読み込む
 holiday = pd.read_csv(
     'https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv', 
@@ -169,9 +277,16 @@ holiday = pd.read_csv(
 
 # 結果の確認
 print(holiday.head(3))
-#+end_example
+#+end_src
 
-#+begin_example
+#+RESULTS:
+:            国民の祝日・休日名称
+: 国民の祝日・休日月日
+: 1955-01-01         元日
+: 1955-01-15       成人の日
+: 1955-03-21       春分の日
+
+#+begin_src jupyter-python :exports both
 # 祝日フラグ
 is_holiday = sales_day.index.isin(holiday.index).astype(int)
 
@@ -185,15 +300,29 @@ sales_day['holiday'] = is_holiday
 
 # 結果の確認
 print(sales_day.head(3))
-#+end_example
+#+end_src
 
-#+begin_example
+#+RESULTS:
+:                  sales  flyer  flyer_lag1  flyer_lag2  holiday
+: date
+: 2000-01-01  462.387217    0.0         0.0         0.0        1
+: 2000-01-02  363.262237    0.0         0.0         0.0        1
+: 2000-01-03  356.648654    0.0         0.0         0.0        1
+
+#+begin_src jupyter-python :exports both
 # 日曜日かつ祝日の日は、通常の祝日と区別する
 sales_day['sun_holiday'] = is_holiday & (sales_day.index.dayofweek == 6)
 
 # 結果の確認
 print(sales_day.head(3))
-#+end_example
+#+end_src
+
+#+RESULTS:
+:                  sales  flyer  flyer_lag1  flyer_lag2  holiday  sun_holiday
+: date
+: 2000-01-01  462.387217    0.0         0.0         0.0        1            0
+: 2000-01-02  363.262237    0.0         0.0         0.0        1            1
+: 2000-01-03  356.648654    0.0         0.0         0.0        1            0
 
 *** 単純な基本構造時系列モデルによる分析
 :PROPERTIES:
@@ -203,7 +332,7 @@ print(sales_day.head(3))
 :PROPERTIES:
 :CUSTOM_ID: モデルの推定
 :END:
-#+begin_example
+#+begin_src jupyter-python :exports both
 # 季節変動ありの平滑化トレンドモデル
 mod_bsts_1 = tsa.UnobservedComponents(
     sales_day['sales'],                       # 対象データ
@@ -218,23 +347,43 @@ res_bsts_1 = mod_bsts_1.fit(
     method='nm',              # Nelder-Mead法を使う
     maxiter=5000              # 最大繰り返し数
 )
-#+end_example
+#+end_src
 
-#+begin_example
+#+RESULTS:
+: Optimization terminated successfully.
+:          Current function value: 4.954074
+:          Iterations: 1672
+:          Function evaluations: 2474
+
+#+begin_src jupyter-python :exports both
 print(res_bsts_1.params)
-#+end_example
+#+end_src
+
+#+RESULTS:
+: sigma2.irregular    1237.337361
+: sigma2.trend           0.005019
+: sigma2.seasonal        0.001131
+: beta.holiday          54.939875
+: beta.sun_holiday     -89.121114
+: beta.flyer            -5.851354
+: beta.flyer_lag1       58.599129
+: beta.flyer_lag2       27.070706
+: dtype: float64
 
 **** 残差診断
 :PROPERTIES:
 :CUSTOM_ID: 残差診断
 :END:
-#+begin_example
+#+begin_src jupyter-python :exports both :file ./images/5-6-3.png :results output file
 # 残差のチェック
 _ = res_bsts_1.plot_diagnostics(lags=30,
         fig=plt.figure(tight_layout=True, figsize=(15, 8)))
-#+end_example
+#+end_src
 
-#+begin_example
+#+RESULTS:
+[[file:./images/5-6-3.png]]
+
+#+begin_src jupyter-python :exports both :file ./images/5-6-4.png :results output file
 # 1時点前から30時点前まで、1つずつ最大次数をずらして、30回検定を行う
 res_test = res_bsts_1.test_serial_correlation(
     method='ljungbox', lags=30)
@@ -247,7 +396,10 @@ ax.scatter(np.arange(1,31), res_test[0][1])
 
 # 高さ0.05の位置に赤線を引く
 ax.plot(np.arange(1,31), np.tile(0.05, 30), color='red')
-#+end_example
+#+end_src
+
+#+RESULTS:
+[[file:./images/5-6-4.png]]
 
 *** 短期と長期の変動の追加
 :PROPERTIES:
@@ -257,7 +409,7 @@ ax.plot(np.arange(1,31), np.tile(0.05, 30), color='red')
 :PROPERTIES:
 :CUSTOM_ID: モデルの推定-1
 :END:
-#+begin_example
+#+begin_src jupyter-python :exports both
 # 季節変動ありの平滑化トレンドモデル
 mod_bsts_2 = tsa.UnobservedComponents(
     sales_day['sales'],                       # 対象データ
@@ -274,23 +426,49 @@ res_bsts_2 = mod_bsts_2.fit(
     method='nm',              # Nelder-Mead法を使う
     maxiter=5000              # 最大繰り返し数
 )
-#+end_example
+#+end_src
 
-#+begin_example
+#+RESULTS:
+: Optimization terminated successfully.
+:          Current function value: 4.926650
+:          Iterations: 4277
+:          Function evaluations: 5862
+
+#+begin_src jupyter-python :exports both
 print(res_bsts_2.params)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+sigma2.irregular                  628.416020
+sigma2.trend                        0.000633
+sigma2.seasonal                     0.000005
+sigma2.freq_seasonal_365.25(1)      0.000005
+sigma2.ar                         524.133818
+ar.L1                               0.289602
+ar.L2                              -0.081745
+beta.holiday                       42.688374
+beta.sun_holiday                  -39.619312
+beta.flyer                         -4.793993
+beta.flyer_lag1                    45.619298
+beta.flyer_lag2                    22.602524
+dtype: float64
 #+end_example
 
 **** 残差診断
 :PROPERTIES:
 :CUSTOM_ID: 残差診断-1
 :END:
-#+begin_example
+#+begin_src jupyter-python :exports both :file ./images/5-6-5.png :results output file
 # 残差のチェック
 _ = res_bsts_2.plot_diagnostics(lags=30, 
         fig=plt.figure(tight_layout=True, figsize=(15, 8)))
-#+end_example
+#+end_src
 
-#+begin_example
+#+RESULTS:
+[[file:./images/5-6-5.png]]
+
+#+begin_src jupyter-python :exports both :file ./images/5-6-6.png :results output file
 # 1時点前から30時点前まで、1つずつ最大次数をずらして、24回検定を行う
 res_test = res_bsts_2.test_serial_correlation(
     method='ljungbox', lags=30)
@@ -303,13 +481,16 @@ ax.scatter(np.arange(1,31), res_test[0][1])
 
 # 高さ0.05の位置に赤線を引く
 ax.plot(np.arange(1,31), np.tile(0.05, 30), color='red')
-#+end_example
+#+end_src
+
+#+RESULTS:
+[[file:./images/5-6-6.png]]
 
 **** 2つのモデルの比較
 :PROPERTIES:
 :CUSTOM_ID: つのモデルの比較
 :END:
-#+begin_example
+#+begin_src jupyter-python :exports both :file ./images/5-6-7.png :results output file
 # 2つのモデルの比較(水準成分)
 
 # DataFrameにまとめる
@@ -341,25 +522,34 @@ ax.xaxis.set_major_locator(mdates.MonthLocator([1,6]))
 
 # 軸ラベルのフォーマット
 ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y年%m月'))
-#+end_example
+#+end_src
 
-#+begin_example
+#+RESULTS:
+[[file:./images/5-6-7.png]]
+
+#+begin_src jupyter-python :exports both
 # ドリフト成分の比較
 print('単純なモデルのドリフト成分', res_bsts_1.trend['smoothed'][-1])
 print('複雑なモデルのドリフト成分', res_bsts_2.trend['smoothed'][-1])
-#+end_example
+#+end_src
+
+#+RESULTS:
+: 単純なモデルのドリフト成分 -1.1887992736305346
+: 複雑なモデルのドリフト成分 -0.5139576580391485
 
 *** sktimeの利用
 :PROPERTIES:
 :CUSTOM_ID: sktimeの利用
 :END:
-#+begin_example
+#+begin_src jupyter-python :exports both
 # 日付インデックスをPeriodIndexに修正する
 sales_day_sk = sales_day.copy()
 sales_day_sk = sales_day_sk.to_period()
-#+end_example
+#+end_src
 
-#+begin_example
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both :results none
 # 予測器
 forecaster = UnobservedComponents(
     level='smooth trend',     # 平滑化トレンド
@@ -376,9 +566,51 @@ forecaster.fit(
     sales_day_sk[['holiday', 'sun_holiday', 
                   'flyer', 'flyer_lag1', 'flyer_lag2']]
 )
-#+end_example
+#+end_src
 
-#+begin_example
+#+RESULTS:
+
+#+begin_src jupyter-python :exports both
 # 参考
 print(forecaster.summary())
+#+end_src
+
+#+RESULTS:
+#+begin_example
+                                  Unobserved Components Results
+=================================================================================================
+Dep. Variable:                                     sales   No. Observations:                  546
+Model:                                      smooth trend   Log Likelihood               -2689.951
+                                + stochastic seasonal(7)   AIC                           5403.902
+                   + stochastic freq_seasonal(365.25(1))   BIC                           5455.311
+                                                 + AR(2)   HQIC                          5424.014
+Date:                                   Tue, 17 Dec 2024
+Time:                                           08:00:21
+Sample:                                       01-01-2000
+                                            - 06-29-2001
+Covariance Type:                                     opg
+==================================================================================================
+                                     coef    std err          z      P>|z|      [0.025      0.975]
+--------------------------------------------------------------------------------------------------
+sigma2.irregular                 628.4160   1153.990      0.545      0.586   -1633.364    2890.196
+sigma2.trend                       0.0006      0.001      0.675      0.500      -0.001       0.002
+sigma2.seasonal                 4.713e-06      0.466   1.01e-05      1.000      -0.913       0.913
+sigma2.freq_seasonal_365.25(1)  5.418e-06      1.053   5.15e-06      1.000      -2.063       2.063
+sigma2.ar                        524.1338   1253.092      0.418      0.676   -1931.881    2980.149
+ar.L1                              0.2896      0.681      0.425      0.671      -1.046       1.625
+ar.L2                             -0.0817      0.344     -0.238      0.812      -0.756       0.592
+beta.holiday                      42.6884      7.344      5.813      0.000      28.295      57.082
+beta.sun_holiday                 -39.6193     13.110     -3.022      0.003     -65.314     -13.925
+beta.flyer                        -4.7940      8.098     -0.592      0.554     -20.666      11.078
+beta.flyer_lag1                   45.6193      7.947      5.740      0.000      30.043      61.196
+beta.flyer_lag2                   22.6025      7.358      3.072      0.002       8.181      37.024
+===================================================================================
+Ljung-Box (L1) (Q):                   0.00   Jarque-Bera (JB):                 0.62
+Prob(Q):                              0.98   Prob(JB):                         0.73
+Heteroskedasticity (H):               1.05   Skew:                            -0.00
+Prob(H) (two-sided):                  0.76   Kurtosis:                         2.83
+===================================================================================
+
+Warnings:
+[1] Covariance matrix calculated using the outer product of gradients (complex-step).
 #+end_example
